@@ -1,0 +1,1548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tooting Tub</title>
+<meta name="description" content="Four animals in an inflatable tub fart their way up a spiky canal while a crocodile gives chase. Play alone or online with three friends.">
+<meta property="og:title" content="Tooting Tub">
+<meta property="og:description" content="Four animals. One inflatable tub. A canal full of spikes. The only engine is their bellies.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23fff' stroke='%231d2b2f' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%23e8473b' stroke-width='8' stroke-dasharray='17 17'/%3E%3Ccircle cx='32' cy='32' r='14' fill='%238fd6dc' stroke='%231d2b2f' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;600;800&display=swap">
+<style>
+/* Layout: full-bleed canal canvas, a chunky scoreboard on top, four belly buttons along the bottom */
+:root{
+  --water:#2c8c96;
+  --grass:#86b85c;
+  --ink:#1d2b2f;
+  --panel:#ffffff;
+  --panel-press:#eef7d6;
+  --tub:#e8473b;
+  --gas:#a9c93a;
+  --warn:#e0a33a;
+  --danger:#d8342a;
+  --muted:#5b6b6e;
+  --line:#d9e3de;
+  --scrim:rgba(18,40,44,.5);
+  --display:"Bagel Fat One","Arial Rounded MT Bold",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--grass);color:var(--ink);font:14px var(--body);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#app{position:fixed;inset:0}
+#c{display:block;width:100%;height:100%}
+
+.hud{position:absolute;top:0;left:0;right:0;display:flex;gap:8px;align-items:flex-start;justify-content:space-between;
+  padding-top:calc(10px + env(safe-area-inset-top,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.board{display:flex;background:var(--panel);border:3px solid var(--ink);border-radius:14px;padding:6px 4px;box-shadow:0 4px 0 var(--ink)}
+.stat{display:flex;flex-direction:column;padding:0 10px;min-width:62px}
+.stat + .stat{border-left:2px solid var(--line)}
+.lbl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.val{font-family:var(--display);font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
+.side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.btns{display:flex;gap:6px;pointer-events:auto}
+.small-btn{font:800 13px/1 var(--body);color:var(--ink);background:var(--panel);border:3px solid var(--ink);border-radius:12px;padding:8px 10px;box-shadow:0 3px 0 var(--ink);cursor:pointer}
+.small-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.small-btn:focus-visible,.belly:focus-visible,.big-btn:focus-visible,.seat:focus-visible,.link-btn:focus-visible{outline:3px solid var(--gas);outline-offset:3px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip{font:800 12px/1 var(--body);letter-spacing:.04em;padding:6px 9px;border-radius:999px;border:2px solid var(--ink);background:var(--panel)}
+.chip.turbo{background:#ffd3b0}
+.chip.patch{background:#f3e3c8}
+#crocWarn{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(118px + env(safe-area-inset-bottom,0px));
+  font:800 13px/1 var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--panel);background:var(--ink);padding:8px 12px;border-radius:999px;pointer-events:none;white-space:nowrap}
+#crocWarn.close{background:var(--danger);animation:throb .5s ease-in-out infinite alternate}
+@keyframes throb{to{transform:translateX(-50%) scale(1.08)}}
+#toast{position:absolute;left:50%;transform:translateX(-50%);top:calc(84px + env(safe-area-inset-top,0px));font:800 14px/1.2 var(--body);background:var(--ink);color:var(--panel);
+  padding:10px 14px;border-radius:12px;pointer-events:none;max-width:calc(100% - 32px);text-align:center;z-index:5}
+
+.pad{position:absolute;left:0;right:0;bottom:0;margin:0 auto;max-width:780px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.belly{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:8px;row-gap:5px;align-items:center;background:var(--panel);border:3px solid var(--ink);border-radius:16px;
+  padding:8px 10px;box-shadow:0 5px 0 var(--ink);font:inherit;color:inherit;text-align:left;cursor:pointer;touch-action:none;min-width:0}
+.belly.on{transform:translateY(3px);box-shadow:0 2px 0 var(--ink);background:var(--panel-press)}
+.belly.theirs{opacity:.6;cursor:default;box-shadow:0 2px 0 var(--ink);transform:translateY(3px)}
+.belly.mine{background:#f7fbe9}
+.belly canvas{width:44px;height:44px;grid-row:span 2}
+.bname{display:flex;justify-content:space-between;align-items:baseline;gap:6px;min-width:0}
+.nm{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.nm small{display:block;font-weight:600;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.key{font-family:var(--display);font-size:20px;line-height:1}
+.who{display:none;font-size:10.5px;font-weight:800;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meter{height:10px;border-radius:6px;background:var(--line);border:2px solid var(--ink);overflow:hidden}
+.meter i{display:block;height:100%;width:100%;background:var(--gas);transition:width .08s linear}
+.belly.low .meter i{background:var(--warn)}
+
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:var(--scrim);overflow:auto;touch-action:pan-y;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.card{background:var(--panel);border:3px solid var(--ink);border-radius:22px;box-shadow:0 8px 0 var(--ink);max-width:540px;width:100%;padding:24px 24px 22px;display:flex;flex-direction:column;gap:14px}
+.card h1,.card h2{font-family:var(--display);font-weight:400;color:var(--tub);text-shadow:3px 3px 0 var(--ink);margin:0;line-height:.95;text-wrap:balance}
+.card h1{font-size:clamp(44px,10vw,68px)}
+.card h2{font-size:clamp(44px,11vw,72px);text-align:center}
+.card h3{font-family:var(--display);font-weight:400;font-size:20px;margin:0}
+.tag{font-size:16px;line-height:1.45;margin:0}
+.rules{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14.5px;line-height:1.45}
+.rules li{display:grid;grid-template-columns:22px 1fr;gap:8px}
+.rules li::before{content:"";width:14px;height:14px;margin-top:3px;border-radius:50%;border:3px solid var(--ink);background:var(--tub)}
+.rules b{font-weight:800}
+.keys{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);align-items:center}
+kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);border-bottom-width:4px;border-radius:7px;padding:3px 7px;background:var(--panel)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row > *{flex:1 1 180px}
+.big-btn{font-family:var(--display);font-size:22px;color:var(--ink);background:var(--gas);border:3px solid var(--ink);border-radius:16px;padding:12px 16px;box-shadow:0 5px 0 var(--ink);cursor:pointer}
+.big-btn.alt{background:#8fd6dc}
+.big-btn.plain{background:var(--panel)}
+.big-btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink)}
+.big-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:0 5px 0 var(--ink)}
+.link-btn{font:800 14px/1 var(--body);color:var(--muted);background:none;border:0;padding:6px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px;align-self:flex-start}
+.reason{text-align:center;font-size:17px;font-weight:600;margin:0}
+.results{display:grid;grid-template-columns:repeat(3,1fr);border:3px solid var(--ink);border-radius:14px;overflow:hidden}
+.results div{display:flex;flex-direction:column;align-items:center;padding:10px 4px}
+.results div + div{border-left:2px solid var(--line)}
+.newbest{text-align:center;font-weight:800;color:var(--tub);margin:0}
+.hint{font-size:12.5px;color:var(--muted);text-align:center;margin:0;line-height:1.4}
+.status{font-size:14px;font-weight:600;margin:0;min-height:1.4em;color:var(--muted)}
+.status.err{color:var(--danger)}
+
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.field input{font:600 18px var(--body);color:var(--ink);background:var(--panel);border:3px solid var(--ink);border-radius:12px;padding:10px 12px;width:100%;user-select:text;-webkit-user-select:text;touch-action:manipulation}
+.field input:focus{outline:3px solid var(--gas);outline-offset:2px}
+#codeInput{font-family:var(--display);font-size:24px;letter-spacing:.2em;text-transform:uppercase}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.or::before,.or::after{content:"";flex:1;height:2px;background:var(--line)}
+.join-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+
+.roomcode{display:flex;align-items:center;justify-content:space-between;gap:12px;border:3px dashed var(--ink);border-radius:16px;padding:10px 14px;flex-wrap:wrap}
+.roomcode .code{font-family:var(--display);font-size:40px;letter-spacing:.14em;line-height:1}
+.seats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.seat{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:center;text-align:left;font:inherit;color:inherit;background:var(--panel);border:3px solid var(--ink);border-radius:14px;padding:8px 10px;box-shadow:0 4px 0 var(--ink);cursor:pointer;min-width:0}
+.seat canvas{width:44px;height:44px;grid-row:span 2}
+.seat b{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seat span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seat.mine{background:#eef7d6}
+.seat.mine span{color:var(--ink);font-weight:800}
+.seat.taken{background:#eef1f0;cursor:not-allowed}
+.seat.taken span{color:var(--ink);font-weight:700}
+.players{display:flex;flex-wrap:wrap;gap:6px}
+.players .chip{font-size:13px}
+.players .chip.me{background:#eef7d6}
+
+@media (max-width:600px){
+  .belly{grid-template-columns:1fr;justify-items:center;padding:6px 4px;row-gap:3px}
+  .belly canvas{grid-row:auto;width:38px;height:38px}
+  .bname{justify-content:center}
+  .nm{display:none}
+  .online .who{display:block}
+  .meter{width:100%}
+  .stat{min-width:50px;padding:0 7px}
+  .val{font-size:18px}
+  #crocWarn{bottom:calc(132px + env(safe-area-inset-bottom,0px))}
+  .card{padding:20px 18px 18px}
+  .roomcode .code{font-size:34px}
+}
+@media (prefers-reduced-motion:reduce){#crocWarn.close{animation:none}.meter i{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c" aria-label="Canal with the tub of animals"></canvas>
+
+  <div class="hud">
+    <div class="board">
+      <div class="stat"><span class="lbl">Distance</span><span class="val" id="dist">0 m</span></div>
+      <div class="stat"><span class="lbl">Best</span><span class="val" id="best">0 m</span></div>
+      <div class="stat"><span class="lbl">Ducks</span><span class="val" id="ducks">0</span></div>
+    </div>
+    <div class="side">
+      <div class="btns">
+        <button class="small-btn" id="muteBtn" type="button">Sound on</button>
+        <button class="small-btn" id="pauseBtn" type="button">Pause</button>
+      </div>
+      <div class="chips">
+        <span class="chip" id="roomChip" hidden>Room ABCD</span>
+        <span class="chip turbo" id="turboChip" hidden>Turbo 6s</span>
+        <span class="chip patch" id="patchChip" hidden>Patch kit ready</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="crocWarn" hidden>Croc 40 m behind</div>
+  <div id="toast" hidden></div>
+
+  <div class="pad" id="pad"></div>
+
+  <div class="overlay" id="titleScreen">
+    <div class="card">
+      <h1>Tooting Tub</h1>
+      <p class="tag">Four animals share one inflatable tub on a narrow canal. There are no paddles. Every push comes from a well-timed fart.</p>
+      <ul class="rules">
+        <li><span>Each animal sits on one side and farts outward, shoving the tub the other way. <b>Pickles the pig</b> sits at the back, so her toots send you forward.</span></li>
+        <li><span>Spikes guard the canal's <b>corners</b>, and spiky buoys drift in later. One touch and the tub pops. Plain walls just bounce you.</span></li>
+        <li><span>Gas refills slowly. Grab <b>beans</b> to refuel everyone, <b>chillies</b> for turbo toots, <b>patch kits</b> to survive one hit, and rubber <b>ducks</b> for points.</span></li>
+        <li><span>A <b>crocodile</b> follows you upstream and speeds up the further you go. Keep moving.</span></li>
+      </ul>
+      <div class="keys">
+        <span><kbd>&larr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> <kbd>&rarr;</kbd> or <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>D</kbd></span>
+        <span>Same keyboard, 4 players: <kbd>Q</kbd> <kbd>Z</kbd> <kbd>M</kbd> <kbd>P</kbd></span>
+        <span>Hold to keep tooting</span>
+      </div>
+      <div class="row">
+        <button class="big-btn" id="startBtn" type="button">Play on this device</button>
+        <button class="big-btn alt" id="onlineBtn" type="button">Play online with friends</button>
+      </div>
+      <p class="hint">Online, each friend joins from their own phone or computer with a room code and controls one animal in the same tub.</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="netScreen" hidden>
+    <div class="card">
+      <h3>Play online</h3>
+      <div class="field">
+        <label for="nickInput">Your nickname</label>
+        <input id="nickInput" maxlength="14" autocomplete="nickname" placeholder="e.g. Captain Toot">
+      </div>
+      <button class="big-btn" id="createBtn" type="button">Create a room</button>
+      <div class="or">or join a friend</div>
+      <div class="join-row">
+        <div class="field">
+          <label for="codeInput">Room code</label>
+          <input id="codeInput" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
+        </div>
+        <button class="big-btn alt" id="joinBtn" type="button">Join</button>
+      </div>
+      <p class="status" id="netStatus" role="status"></p>
+      <button class="link-btn" id="netBackBtn" type="button">Back</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="roomScreen" hidden>
+    <div class="card">
+      <div class="roomcode">
+        <div><span class="lbl">Room code</span><div class="code" id="roomCode">ABCD</div></div>
+        <button class="small-btn" id="copyBtn" type="button">Copy invite link</button>
+      </div>
+      <p class="hint" id="inviteText" style="text-align:left"></p>
+      <div><span class="lbl">In the room</span><div class="players" id="playerList"></div></div>
+      <div><span class="lbl">Pick your animal</span>
+        <p class="hint" style="text-align:left;margin:4px 0 8px">Tap a free seat to sit there. You can take more than one if you have fewer than four players. Empty seats can't fart.</p>
+        <div class="seats" id="seatGrid"></div>
+      </div>
+      <button class="big-btn" id="roomStartBtn" type="button">Start the game</button>
+      <p class="status" id="roomStatus" role="status"></p>
+      <button class="link-btn" id="leaveRoomBtn" type="button">Leave room</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="overScreen" hidden>
+    <div class="card">
+      <h2 id="overTitle">POP!</h2>
+      <p class="reason" id="overReason">The corner spikes got you.</p>
+      <div class="results">
+        <div><span class="lbl">Distance</span><span class="val" id="rDist">0 m</span></div>
+        <div><span class="lbl">Ducks</span><span class="val" id="rDucks">0</span></div>
+        <div><span class="lbl">Best</span><span class="val" id="rBest">0 m</span></div>
+      </div>
+      <p class="newbest" id="newBest" hidden>New best distance!</p>
+      <button class="big-btn" id="againBtn" type="button">Blow up a new tub</button>
+      <button class="big-btn plain" id="toRoomBtn" type="button" hidden>Back to the room</button>
+      <p class="hint" id="overHint">Press Enter to go again</p>
+      <button class="link-btn" id="overLeaveBtn" type="button" hidden>Leave room</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="pauseScreen" hidden>
+    <div class="card">
+      <h2>Paused</h2>
+      <button class="big-btn" id="resumeBtn" type="button">Keep tooting</button>
+      <p class="hint">Press Esc to resume</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d');
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const INK = '#1d2b2f';
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+
+// World generation uses a seeded generator so every player in a room builds the identical canal.
+function mulberry32(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+let wrng = Math.random;
+const wrand = (a, b) => a + wrng() * (b - a);
+
+// ---------- tuning ----------
+const SEG = 260;          // vertical length of one canal segment
+const Y0 = 800;           // y of the first canal point (start is at y = 0, upstream is -y)
+const R = 46;             // tub radius
+const SPIKE_HALF = 58;    // spikes cover this far either side of a corner
+const FART_COST = 14, GAS_REGEN = 12, IMPULSE = 112, DRAG = 0.55, CURRENT = 18, MAXV = 360, REPEAT = 0.2;
+
+const ANIMALS = [
+  { id:'cow', name:'Clover', kind:'Cow', seat:[ 1, 0], push:[-1, 0], keys:['ArrowLeft','KeyA','KeyQ'],  hint:'←', alt:'A · Q', pitch:62,  does:'right seat', role:'Pushes the tub left' },
+  { id:'pig', name:'Pickles', kind:'Pig', seat:[ 0, 1], push:[ 0,-1], keys:['ArrowUp','KeyW','KeyZ'],    hint:'↑', alt:'W · Z', pitch:88,  does:'back seat', role:'Pushes the tub forward' },
+  { id:'cat', name:'Miso', kind:'Cat', seat:[ 0,-1], push:[ 0, 1], keys:['ArrowDown','KeyS','KeyM'],     hint:'↓', alt:'S · M', pitch:150, does:'front seat', role:'Brakes' },
+  { id:'dog', name:'Biscuit', kind:'Dog', seat:[-1, 0], push:[ 1, 0], keys:['ArrowRight','KeyD','KeyP'], hint:'→', alt:'D · P', pitch:112, does:'left seat', role:'Pushes the tub right' },
+];
+const KEYMAP = {};
+ANIMALS.forEach((a, i) => a.keys.forEach(k => KEYMAP[k] = i));
+const TOOTS = ['PFFT!', 'TOOT!', 'BRAAP!', 'PFRRT!', 'FWUMP!', 'PARP!', 'THBBT!'];
+
+// ---------- canvas sizing ----------
+let cw = 0, ch = 0, dpr = 1, scale = 1, viewW = 0, viewH = 0;
+function resize() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  cw = innerWidth; ch = innerHeight;
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  scale = clamp(Math.min(cw / 600, ch / 720), 0.5, 1.5);
+  viewW = cw / scale; viewH = ch / scale;
+}
+addEventListener('resize', resize);
+resize();
+
+let best = Number(store.get('tootingTubBest')) || 0;
+
+// ---------- sound ----------
+const Snd = {
+  ac: null, master: null, noise: null, on: true, lastBump: 0,
+  init() {
+    if (this.ac) { if (this.ac.state === 'suspended') this.ac.resume(); return; }
+    try {
+      this.ac = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ac.createGain();
+      this.master.gain.value = this.on ? 0.55 : 0;
+      this.master.connect(this.ac.destination);
+      const len = this.ac.sampleRate;
+      this.noise = this.ac.createBuffer(1, len, this.ac.sampleRate);
+      const d = this.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    } catch (e) { this.ac = null; }
+  },
+  setOn(v) { this.on = v; if (this.master) this.master.gain.value = v ? 0.55 : 0; },
+  env(t, peak, dur) {
+    const g = this.ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.015);
+    g.gain.setValueAtTime(peak, t + dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    return g;
+  },
+  noiseSrc() { const s = this.ac.createBufferSource(); s.buffer = this.noise; s.loop = true; return s; },
+  fart(pitch, turbo) {
+    if (!this.ac || !this.on) return;
+    const ac = this.ac, t = ac.currentTime, dur = rand(0.22, 0.48) * (turbo ? 1.3 : 1);
+    const base = pitch * rand(0.85, 1.25) * (turbo ? 0.8 : 1);
+    const osc = ac.createOscillator(); osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(base, t);
+    osc.frequency.exponentialRampToValueAtTime(base * rand(0.5, 0.75), t + dur);
+    const wob = ac.createOscillator(); wob.frequency.value = rand(14, 34);
+    const wobG = ac.createGain(); wobG.gain.value = base * 0.4;
+    wob.connect(wobG).connect(osc.frequency);
+    const trem = ac.createGain(); trem.gain.value = 0.55;
+    const flut = ac.createOscillator(); flut.type = 'square'; flut.frequency.value = rand(24, 46);
+    const flutG = ac.createGain(); flutG.gain.value = 0.45;
+    flut.connect(flutG).connect(trem.gain);
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = base * 7; lp.Q.value = 5;
+    const e = this.env(t, 0.5, dur);
+    osc.connect(trem).connect(lp).connect(e).connect(this.master);
+    const n = this.noiseSrc(); const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 380; bp.Q.value = 1.2;
+    const ne = this.env(t, 0.12, dur * 0.9);
+    n.connect(bp).connect(ne).connect(this.master);
+    [osc, wob, flut, n].forEach(s => { s.start(t); s.stop(t + dur + 0.05); });
+  },
+  squeak() {
+    if (!this.ac || !this.on) return;
+    const t = this.ac.currentTime, o = this.ac.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(1500, t + 0.09);
+    const e = this.env(t, 0.12, 0.1); o.connect(e).connect(this.master); o.start(t); o.stop(t + 0.12);
+  },
+  bump() {
+    if (!this.ac || !this.on) return;
+    const t = this.ac.currentTime; if (t - this.lastBump < 0.25) return; this.lastBump = t;
+    const o = this.ac.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.15);
+    const e = this.env(t, 0.35, 0.16); o.connect(e).connect(this.master); o.start(t); o.stop(t + 0.2);
+  },
+  pop() {
+    if (!this.ac || !this.on) return;
+    const ac = this.ac, t = ac.currentTime;
+    const n = this.noiseSrc(); const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 700;
+    const g = ac.createGain(); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    n.connect(hp).connect(g).connect(this.master); n.start(t); n.stop(t + 0.4);
+    const o = ac.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.3);
+    const e = this.env(t, 0.6, 0.32); o.connect(e).connect(this.master); o.start(t); o.stop(t + 0.35);
+    // the long sad deflating whistle
+    const w = ac.createOscillator(); w.type = 'triangle';
+    w.frequency.setValueAtTime(700, t + 0.1); w.frequency.exponentialRampToValueAtTime(120, t + 1.1);
+    const we = ac.createGain(); we.gain.setValueAtTime(0.0001, t); we.gain.setValueAtTime(0.12, t + 0.12); we.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    w.connect(we).connect(this.master); w.start(t); w.stop(t + 1.2);
+  },
+  chomp() {
+    if (!this.ac || !this.on) return;
+    const t = this.ac.currentTime;
+    for (let k = 0; k < 2; k++) {
+      const o = this.ac.createOscillator(); o.type = 'square';
+      o.frequency.setValueAtTime(110, t + k * 0.16); o.frequency.exponentialRampToValueAtTime(45, t + k * 0.16 + 0.12);
+      const e = this.ac.createGain(); e.gain.setValueAtTime(0.0001, t); e.gain.setValueAtTime(0.3, t + k * 0.16); e.gain.exponentialRampToValueAtTime(0.0001, t + k * 0.16 + 0.14);
+      o.connect(e).connect(this.master); o.start(t); o.stop(t + 0.5);
+    }
+    this.pop();
+  },
+  pickup(kind) {
+    if (!this.ac || !this.on) return;
+    const t = this.ac.currentTime;
+    const notes = { beans:[392, 523], duck:[880, 1175], chili:[523, 659, 784], patch:[440, 554, 659], join:[523, 784] }[kind];
+    notes.forEach((f, k) => {
+      const o = this.ac.createOscillator(); o.type = kind === 'duck' ? 'square' : 'triangle';
+      o.frequency.value = f;
+      const e = this.ac.createGain(); const s = t + k * 0.07;
+      e.gain.setValueAtTime(0.0001, t); e.gain.setValueAtTime(0.15, s); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.14);
+      o.connect(e).connect(this.master); o.start(t); o.stop(s + 0.16);
+    });
+  },
+};
+
+// ---------- online play ----------
+// The room creator's browser is the host: it runs the physics and sends the tub's state to everyone.
+// Other players only send their button presses. PeerJS connects the browsers directly.
+const PREFIX = 'tootingtub-v1-';
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+const freshNet = () => ({ role: 'local', peer: null, conns: new Map(), conn: null, myId: 'host', code: '', players: [], seats: [null, null, null, null], playing: false, leaving: false, sendT: 0 });
+let Net = freshNet();
+const online = () => Net.role !== 'local';
+const canControl = i => !online() || Net.seats[i] === Net.myId;
+const nameOf = id => (Net.players.find(p => p.id === id) || {}).name || '';
+
+function toAll(msg) {
+  if (Net.role !== 'host') return;
+  for (const c of Net.conns.values()) if (c.open) { try { c.send(msg); } catch (e) {} }
+}
+function toHost(msg) { if (Net.conn && Net.conn.open) { try { Net.conn.send(msg); } catch (e) {} } }
+
+// ---------- game state ----------
+let S;
+function newGame(mode, seed) {
+  wrng = mulberry32(seed === undefined ? (Math.random() * 2 ** 31) | 0 : seed);
+  S = {
+    mode, t: 0,
+    tub: { x: 0, y: 0, vx: 0, vy: 0, ang: 0, spin: 0, inv: 0 },
+    pts: [], mines: [], items: [], deco: [], parts: [], texts: [], itemSeq: 0,
+    croc: { y: 760 },
+    ducks: 0, patch: false, chili: 0, maxDist: 0,
+    cam: { x: 0, y: -viewH * 0.1 },
+    gas: [100, 100, 100, 100], puff: [0, 0, 0, 0], strain: [0, 0, 0, 0],
+    held: [false, false, false, false], rep: [0, 0, 0, 0], lastFart: [-9, -9, -9, -9],
+    popT: 0, reason: '', shake: 0, demoT: 0, net: null, netAt: 0,
+  };
+  for (let i = 0; i < 8; i++) addPoint();
+}
+
+function segAt(y) {
+  const P = S.pts;
+  const i = clamp(Math.floor((Y0 - y) / SEG), 0, P.length - 2);
+  const a = P[i], b = P[i + 1], t = (a.y - y) / SEG;
+  return { i, cx: a.x + (b.x - a.x) * t, w: a.w + (b.w - a.w) * t, slope: (b.x - a.x) / SEG };
+}
+
+function addPoint() {
+  const P = S.pts, i = P.length, y = Y0 - i * SEG;
+  const lvl = clamp((i - 5) / 80, 0, 1);
+  let x = 0, w = 310;
+  if (i >= 5) {
+    const prev = P[i - 1];
+    if (wrng() < 0.3 - lvl * 0.15) x = prev.x;
+    else {
+      const mag = wrand(70, 170 + lvl * 70);
+      let dir = wrng() < 0.5 ? -1 : 1;
+      if (Math.abs(prev.x + dir * mag) > 210) dir = -dir;
+      x = prev.x + dir * mag;
+    }
+    x = clamp(x, -230, 230);
+    w = Math.max(200, 300 - lvl * 80) + wrand(-25, 25);
+  }
+  P.push({ y, x, w, sL: false, sR: false });
+
+  // Now that the outgoing direction of the previous point is known, arm its corner with spikes.
+  if (i - 1 >= 5) {
+    const p = P[i - 1], a = P[i - 2];
+    const turn = (x - p.x) - (p.x - a.x);
+    if (Math.abs(turn) > 20) {
+      if (turn > 0) p.sL = true; else p.sR = true;           // outer bank of the bend
+      if (wrng() < 0.15 + lvl * 0.45) { if (turn > 0) p.sR = true; else p.sL = true; }
+    } else if (wrng() < 0.12 + lvl * 0.3) {
+      if (wrng() < 0.5) p.sL = true; else p.sR = true;
+    }
+  }
+
+  if (i >= 1) populate(i);
+}
+
+function populate(i) {
+  const P = S.pts, yTop = P[i].y, yBot = P[i - 1].y;
+  const lvl = clamp((i - 5) / 80, 0, 1);
+  // scenery on the grass
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 2; k++) {
+      const yy = wrand(yTop, yBot), c = segAt(yy);
+      const bank = c.cx + side * c.w / 2;
+      S.deco.push({ type: 'tree', x: bank + side * wrand(70, 260), y: yy, r: wrand(22, 40), hue: wrng() });
+    }
+    if (wrng() < 0.7) {
+      const yy = wrand(yTop, yBot), c = segAt(yy);
+      S.deco.push({ type: 'reeds', x: c.cx + side * (c.w / 2 + 26), y: yy });
+    }
+  }
+  // milestone bridges every 100 m
+  for (let k = Math.ceil(-yBot / 1000); k * -1000 > yTop; k++) {
+    if (k > 0) S.deco.push({ type: 'bridge', y: -k * 1000, m: k * 100 });
+  }
+  if (i < 6) return;
+  const midY = (yTop + yBot) / 2;
+  const spot = (yy, margin) => { const c = segAt(yy); return c.cx + wrand(-1, 1) * (c.w / 2 - margin); };
+  const item = (type, x, y) => S.items.push({ id: S.itemSeq++, type, x, y });
+
+  const mineChance = i > 9 ? Math.min(0.55, (i - 9) * 0.013) : 0;
+  let mineY = null;
+  if (wrng() < mineChance) {
+    mineY = midY + wrand(-40, 40);
+    const c = segAt(mineY);
+    const moving = wrng() < lvl;
+    S.mines.push({ x0: spot(mineY, 60), y: mineY, r: 17, amp: moving ? wrand(20, c.w / 2 - 40) : 0, spd: wrand(0.8, 1.8), ph: wrand(0, 6.3), x: 0 });
+  }
+  const itemY = mineY === null ? midY + wrand(-60, 60) : (mineY > midY ? yTop + 40 : yBot - 40);
+  const roll = wrng();
+  if (roll < 0.3) item('beans', spot(itemY, 50), itemY);
+  else if (roll < 0.62) {
+    const n = wrng() < 0.35 ? 3 : 1, x = spot(itemY, 60);
+    for (let k = 0; k < n; k++) item('duck', x, itemY - k * 42);
+  } else if (roll < 0.67) item('chili', spot(itemY, 50), itemY);
+  else if (roll < 0.70) item('patch', spot(itemY, 50), itemY);
+  else if (wrng() < 0.5) S.deco.push({ type: 'lily', x: spot(itemY, 40), y: itemY, r: wrand(10, 16), a: wrand(0, 6.3) });
+}
+
+// ---------- actions (the host or a solo game decides; everyone plays the effects) ----------
+function fart(i) {
+  const a = ANIMALS[i], T = S.tub;
+  const turbo = S.chili > 0, cost = turbo ? FART_COST / 2 : FART_COST;
+  if (S.gas[i] < cost) { strainFx(i); toAll({ t: 'n', i }); return; }
+  S.gas[i] -= cost;
+  const k = IMPULSE * (turbo ? 1.7 : 1);
+  T.vx += a.push[0] * k; T.vy += a.push[1] * k;
+  T.spin += rand(-1.4, 1.4);
+  const w = (Math.random() * TOOTS.length) | 0;
+  fartFx(i, turbo, w);
+  toAll({ t: 'f', i, tb: turbo ? 1 : 0, w });
+  S.lastFart[i] = S.t;
+  if (S.lastFart.every(t => S.t - t < 0.25)) {
+    S.ducks += 3; S.lastFart = [-9, -9, -9, -9];
+    textAll(T.x, T.y - R - 40, 'QUARTET! +3', '#ffd84a', 28);
+    Snd.pickup('chili');
+  }
+}
+function fartFx(i, turbo, w, silent) {
+  const a = ANIMALS[i], T = S.tub;
+  S.puff[i] = 0.35;
+  // cloud bursts out of the animal's side of the tub, away from the push
+  const ox = T.x + a.seat[0] * (R + 4), oy = T.y + a.seat[1] * (R + 4);
+  for (let n = 0; n < (turbo ? 16 : 11); n++) {
+    const sp = rand(60, 170), ang = Math.atan2(a.seat[1], a.seat[0]) + rand(-0.55, 0.55);
+    S.parts.push({ type: 'gas', x: ox, y: oy, vx: Math.cos(ang) * sp + T.vx * 0.3, vy: Math.sin(ang) * sp + T.vy * 0.3,
+      r: rand(6, 12), gr: rand(18, 34), life: 0, max: rand(0.6, 1.1), turbo });
+  }
+  if (silent) return;
+  Snd.fart(a.pitch, turbo);
+  let label = TOOTS[w];
+  if (online() && Net.seats[i]) label = nameOf(Net.seats[i]) + ': ' + label;
+  addText(ox + a.seat[0] * 30, oy + a.seat[1] * 30 - 6, label, turbo ? '#ffb15c' : '#e9f7a8', 20);
+}
+function strainFx(i) {
+  const a = ANIMALS[i], T = S.tub;
+  S.strain[i] = 0.35;
+  Snd.squeak();
+  addText(T.x + a.seat[0] * 40, T.y + a.seat[1] * 40 - 10, 'nnngh…', '#ffffff', 16);
+}
+
+function press(i) {
+  if (S.mode !== 'play' || !canControl(i)) return;
+  Snd.init();
+  padBtns[i].classList.add('on');
+  if (Net.role === 'client') { toHost({ t: 'p', i }); return; }
+  hostPress(i);
+}
+function release(i) {
+  padBtns[i].classList.remove('on');
+  if (Net.role === 'client') { if (S.mode === 'play' && canControl(i)) toHost({ t: 'r', i }); return; }
+  if (S) S.held[i] = false;
+}
+function hostPress(i) {
+  if (S.mode !== 'play' || S.held[i]) return;
+  S.held[i] = true; fart(i); S.rep[i] = REPEAT;
+}
+
+function addText(x, y, txt, col, size) { S.texts.push({ x, y, txt, col, size, life: 0, max: 0.9 }); }
+function textAll(x, y, txt, col, size) { addText(x, y, txt, col, size); toAll({ t: 'x', x, y, txt, col, size }); }
+
+function burst(reason) {
+  const T = S.tub;
+  if (reason !== 'croc' && S.patch) {
+    S.patch = false; T.inv = 1.8;
+    T.vx = -T.vx * 0.8 + (T.x < segAt(T.y).cx ? 120 : -120); T.vy = Math.abs(T.vy) * 0.4 + 60;
+    patchFx(); toAll({ t: 'pt' });
+    return;
+  }
+  burstFx(reason); toAll({ t: 'b', r: reason });
+}
+function patchFx() {
+  const T = S.tub;
+  addText(T.x, T.y - R - 30, 'PATCHED!', '#ffffff', 26);
+  Snd.pickup('patch'); Snd.bump(); S.shake = 0.5;
+}
+function burstFx(reason) {
+  const T = S.tub;
+  S.mode = 'popping'; S.popT = 0; S.reason = reason; S.shake = 1;
+  S.held = [false, false, false, false];
+  padBtns.forEach(b => b.classList.remove('on'));
+  if (reason === 'croc') Snd.chomp(); else Snd.pop();
+  for (let n = 0; n < 26; n++) {
+    const ang = rand(0, Math.PI * 2), sp = rand(80, 320);
+    S.parts.push({ type: 'frag', x: T.x + Math.cos(ang) * R * 0.8, y: T.y + Math.sin(ang) * R * 0.8, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+      r: rand(4, 9), rot: rand(0, 6), vr: rand(-10, 10), life: 0, max: rand(0.8, 1.4), col: n % 2 ? '#e8473b' : '#ffffff' });
+  }
+  for (let n = 0; n < 18; n++) {
+    const ang = rand(0, Math.PI * 2), sp = rand(40, 160);
+    S.parts.push({ type: 'drop', x: T.x, y: T.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r: rand(2, 5), life: 0, max: rand(0.5, 0.9) });
+  }
+  addText(T.x, T.y - R - 20, reason === 'croc' ? 'CHOMP!' : 'POP!', '#ffffff', 40);
+}
+
+function collect(it) {
+  if (it.type === 'beans') for (let i = 0; i < 4; i++) S.gas[i] = Math.min(100, S.gas[i] + 55);
+  if (it.type === 'duck') S.ducks++;
+  if (it.type === 'chili') S.chili = 6;
+  if (it.type === 'patch') S.patch = true;
+  collectFx(it);
+  toAll({ t: 'c', id: it.id });
+}
+function collectFx(it) {
+  const T = S.tub;
+  const label = { beans: ['BEANS! +GAS', '#ffe0a8', 20], duck: ['+1 DUCK', '#ffe46b', 18], chili: ['TURBO TOOTS!', '#ffb15c', 22], patch: ['PATCH KIT', '#ffffff', 20] }[it.type];
+  addText(it.x, it.y - 20, ...label);
+  Snd.pickup(it.type);
+  for (let n = 0; n < 8; n++) {
+    const ang = rand(0, 6.3);
+    S.parts.push({ type: 'drop', x: it.x, y: it.y, vx: Math.cos(ang) * 90 + T.vx * 0.3, vy: Math.sin(ang) * 90 + T.vy * 0.3, r: rand(2, 4), life: 0, max: 0.5 });
+  }
+}
+
+// ---------- update ----------
+function update(dt) {
+  S.t += dt;
+  const T = S.tub;
+  const playing = S.mode === 'play';
+  const authority = Net.role !== 'client';
+
+  for (let i = 0; i < 4; i++) {
+    S.puff[i] = Math.max(0, S.puff[i] - dt);
+    S.strain[i] = Math.max(0, S.strain[i] - dt);
+    if (playing && authority) {
+      S.gas[i] = Math.min(100, S.gas[i] + GAS_REGEN * dt * (S.chili > 0 ? 1.5 : 1));
+      if (S.held[i]) { S.rep[i] -= dt; if (S.rep[i] <= 0) { fart(i); S.rep[i] = REPEAT; } }
+    }
+  }
+
+  if (S.mode === 'title') {
+    S.demoT -= dt;
+    if (S.demoT <= 0) { fartFx((Math.random() * 4) | 0, false, 0, true); S.demoT = rand(0.6, 1.4); }
+  }
+
+  if (playing && authority) {
+    S.chili = Math.max(0, S.chili - dt);
+    T.inv = Math.max(0, T.inv - dt);
+    T.vy += CURRENT * dt;
+    const d = Math.pow(DRAG, dt); T.vx *= d; T.vy *= d;
+    const sp = Math.hypot(T.vx, T.vy);
+    if (sp > MAXV) { T.vx *= MAXV / sp; T.vy *= MAXV / sp; }
+    T.x += T.vx * dt; T.y += T.vy * dt;
+    S.maxDist = Math.max(S.maxDist, -T.y / 10);
+    collide();
+    if (S.mode === 'play') {
+      const cs = 34 + Math.min(66, S.maxDist * 0.05);
+      S.croc.y -= cs * dt;
+      if (S.croc.y - T.y > 650) S.croc.y = T.y + 650;
+      if (S.croc.y - T.y < R + 34) burst('croc');
+    }
+  } else if (playing && S.net) {
+    // follow the host's tub, predicting a little ahead from its velocity
+    const n = S.net, age = Math.min(0.25, (performance.now() - S.netAt) / 1000);
+    T.x += T.vx * dt; T.y += T.vy * dt;
+    const k = Math.min(1, dt * 10);
+    T.x += (n.x + n.vx * age - T.x) * k; T.y += (n.y + n.vy * age - T.y) * k;
+    T.inv = Math.max(0, T.inv - dt);
+  }
+  if (playing) {
+    const sp = Math.hypot(T.vx, T.vy);
+    if (sp > 40 && Math.random() < dt * 30) {
+      S.parts.push({ type: 'wake', x: T.x + rand(-R, R) * 0.6 - T.vx / sp * R, y: T.y - T.vy / sp * R, vx: 0, vy: CURRENT, r: rand(3, 6), gr: 10, life: 0, max: 0.9 });
+    }
+  }
+  T.ang += (T.spin - T.ang * 2) * dt;
+  T.spin *= Math.pow(0.25, dt);
+
+  if (S.mode === 'popping' || S.mode === 'over') {
+    S.popT += dt;
+    if (S.mode === 'popping' && S.popT > 1.5 && authority) gameOver();
+  }
+
+  // keep the canal ahead generated
+  const need = Math.min(T.y, S.cam.y) - viewH - SEG * 2;
+  while (S.pts[S.pts.length - 1].y > need) addPoint();
+
+  for (const m of S.mines) {
+    const c = segAt(m.y), lim = c.w / 2 - m.r - 6;
+    m.x = clamp(m.x0 + Math.sin(S.t * m.spd + m.ph) * m.amp, c.cx - lim, c.cx + lim);
+  }
+
+  for (const p of S.parts) {
+    p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    const f = Math.pow(p.type === 'gas' ? 0.12 : 0.3, dt); p.vx *= f; p.vy *= f;
+    if (p.gr) p.r += p.gr * dt;
+    if (p.vr) p.rot += p.vr * dt;
+  }
+  S.parts = S.parts.filter(p => p.life < p.max);
+  for (const t of S.texts) { t.life += dt; t.y -= 40 * dt; }
+  S.texts = S.texts.filter(t => t.life < t.max);
+  S.shake = Math.max(0, S.shake - dt * 2.5);
+
+  const ty = T.y - viewH * 0.1;
+  S.cam.y += (ty - S.cam.y) * Math.min(1, dt * 5);
+  const tx = T.x * 0.5 + segAt(T.y).cx * 0.5;
+  S.cam.x += (tx - S.cam.x) * Math.min(1, dt * 3);
+
+  // forget things far behind
+  if ((S.t * 2 | 0) !== ((S.t - dt) * 2 | 0)) {
+    const cut = Math.max(S.croc.y, T.y) + viewH + 300;
+    S.items = S.items.filter(o => o.y < cut);
+    S.mines = S.mines.filter(o => o.y < cut);
+    S.deco = S.deco.filter(o => o.y < cut + 200);
+  }
+
+  // the host shares the tub about 20 times a second
+  if (Net.role === 'host' && (S.mode === 'play' || S.mode === 'popping')) {
+    Net.sendT -= dt;
+    if (Net.sendT <= 0) {
+      Net.sendT = 0.05;
+      const r1 = v => Math.round(v * 10) / 10;
+      toAll({ t: 's', x: r1(T.x), y: r1(T.y), vx: r1(T.vx), vy: r1(T.vy), sp: r1(T.spin), cy: r1(S.croc.y), g: S.gas.map(v => v | 0),
+        ch: r1(S.chili), p: S.patch ? 1 : 0, k: S.ducks, d: r1(S.maxDist), iv: r1(T.inv), tt: r1(S.t) });
+    }
+  }
+}
+
+function collide() {
+  const T = S.tub, c = segAt(T.y), f = 1 / Math.sqrt(1 + c.slope * c.slope);
+  const dl = (T.x - (c.cx - c.w / 2)) * f, dr = ((c.cx + c.w / 2) - T.x) * f;
+  if (T.inv <= 0) {
+    for (let j = c.i - 1; j <= c.i + 2; j++) {
+      const p = S.pts[j]; if (!p) continue;
+      if (Math.abs(T.y - p.y) < SPIKE_HALF + R * 0.5) {
+        if ((p.sL && dl < R + 10) || (p.sR && dr < R + 10)) { burst('spikes'); return; }
+      }
+    }
+    for (const m of S.mines) {
+      if (Math.hypot(m.x - T.x, m.y - T.y) < R + m.r * 0.85) { burst('mine'); return; }
+    }
+  }
+  if (dl < R) { T.x += (R - dl) / f; if (T.vx < 0) { T.vx = -T.vx * 0.5; Snd.bump(); } }
+  if (dr < R) { T.x -= (R - dr) / f; if (T.vx > 0) { T.vx = -T.vx * 0.5; Snd.bump(); } }
+  for (let k = S.items.length - 1; k >= 0; k--) {
+    const it = S.items[k];
+    if (Math.hypot(it.x - T.x, it.y - T.y) < R + 16) { S.items.splice(k, 1); collect(it); }
+  }
+}
+
+// ---------- drawing: animals ----------
+function eyes(g, s, mood, ey, dx) {
+  g.fillStyle = INK; g.strokeStyle = INK; g.lineWidth = s * 0.12; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const sx of [-1, 1]) {
+    g.beginPath();
+    if (mood === 'puff') { g.arc(sx * dx, ey + s * 0.06, s * 0.13, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
+    else if (mood === 'strain') {
+      g.moveTo(sx * dx + sx * 0.1 * s, ey - 0.09 * s); g.lineTo(sx * dx - sx * 0.08 * s, ey); g.lineTo(sx * dx + sx * 0.1 * s, ey + 0.09 * s); g.stroke();
+    } else if (mood === 'wet') { g.arc(sx * dx, ey, s * 0.13, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.stroke(); g.beginPath(); g.fillStyle = INK; g.arc(sx * dx, ey + s * 0.03, s * 0.06, 0, Math.PI * 2); g.fill(); }
+    else { g.arc(sx * dx, ey, s * 0.09, 0, Math.PI * 2); g.fill(); }
+  }
+  if (mood === 'puff') {
+    g.fillStyle = 'rgba(240,90,110,.45)';
+    for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * s * 0.58, s * 0.18, s * 0.16, 0, Math.PI * 2); g.fill(); }
+  }
+}
+function head(g, s, fill) {
+  g.beginPath(); g.arc(0, 0, s, 0, Math.PI * 2); g.fillStyle = fill; g.fill();
+  g.lineWidth = s * 0.12; g.strokeStyle = INK; g.stroke();
+}
+function ell(g, x, y, rx, ry, fill, rot = 0, stroke = true) {
+  g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fillStyle = fill; g.fill();
+  if (stroke) { g.strokeStyle = INK; g.stroke(); }
+}
+function drawAnimal(g, id, x, y, s, mood) {
+  g.save(); g.translate(x, y);
+  if (mood === 'puff') g.scale(1.08, 0.94);
+  g.lineWidth = s * 0.12; g.strokeStyle = INK;
+  if (id === 'pig') {
+    for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(sx * s * 0.25, -s * 0.85); g.lineTo(sx * s * 0.9, -s * 1.05); g.lineTo(sx * s * 0.8, -s * 0.35); g.closePath(); g.fillStyle = '#e9849c'; g.fill(); g.stroke(); }
+    head(g, s, '#f6a8ba');
+    ell(g, 0, s * 0.3, s * 0.4, s * 0.27, '#e9849c');
+    g.fillStyle = INK; for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * s * 0.13, s * 0.3, s * 0.065, 0, Math.PI * 2); g.fill(); }
+    eyes(g, s, mood, -s * 0.22, s * 0.36);
+  } else if (id === 'cow') {
+    for (const sx of [-1, 1]) ell(g, sx * s * 0.5, -s * 0.92, s * 0.16, s * 0.24, '#efe2bf', sx * 0.4);
+    for (const sx of [-1, 1]) ell(g, sx * s * 0.98, -s * 0.3, s * 0.32, s * 0.17, '#cfc8c0', sx * -0.4);
+    head(g, s, '#ffffff');
+    g.save(); g.beginPath(); g.arc(0, 0, s * 0.94, 0, Math.PI * 2); g.clip();
+    g.fillStyle = INK;
+    g.beginPath(); g.ellipse(-s * 0.5, -s * 0.5, s * 0.35, s * 0.28, 0.5, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(s * 0.62, -s * 0.05, s * 0.24, s * 0.3, -0.3, 0, Math.PI * 2); g.fill();
+    g.restore();
+    g.lineWidth = s * 0.12;
+    ell(g, 0, s * 0.45, s * 0.52, s * 0.3, '#f4b6c2');
+    g.fillStyle = INK; for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * s * 0.2, s * 0.45, s * 0.06, 0, Math.PI * 2); g.fill(); }
+    eyes(g, s, mood, -s * 0.12, s * 0.34);
+  } else if (id === 'dog') {
+    head(g, s, '#d49a5c');
+    ell(g, 0, s * 0.36, s * 0.45, s * 0.32, '#f3d6ab');
+    ell(g, 0, s * 0.18, s * 0.17, s * 0.12, INK, 0, false);
+    if (mood !== 'strain') ell(g, s * 0.05, s * 0.66, s * 0.12, s * 0.16, '#ef7d92');
+    for (const sx of [-1, 1]) ell(g, sx * s * 0.86, s * 0.05, s * 0.28, s * 0.55, '#7b4a28', sx * -0.25);
+    eyes(g, s, mood, -s * 0.18, s * 0.34);
+  } else if (id === 'cat') {
+    for (const sx of [-1, 1]) {
+      g.beginPath(); g.moveTo(sx * s * 0.2, -s * 0.85); g.lineTo(sx * s * 0.72, -s * 1.22); g.lineTo(sx * s * 0.9, -s * 0.4); g.closePath(); g.fillStyle = '#f2a43c'; g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(sx * s * 0.38, -s * 0.8); g.lineTo(sx * s * 0.68, -s * 1.0); g.lineTo(sx * s * 0.76, -s * 0.55); g.closePath(); g.fillStyle = '#f7b8c4'; g.fill();
+    }
+    head(g, s, '#f2a43c');
+    g.strokeStyle = '#b8681c'; g.lineWidth = s * 0.1;
+    for (const xx of [-0.22, 0, 0.22]) { g.beginPath(); g.moveTo(xx * s, -s * 0.9); g.lineTo(xx * s, -s * 0.58); g.stroke(); }
+    g.fillStyle = '#ef7d92'; g.beginPath(); g.moveTo(-s * 0.12, s * 0.16); g.lineTo(s * 0.12, s * 0.16); g.lineTo(0, s * 0.3); g.closePath(); g.fill();
+    g.strokeStyle = INK; g.lineWidth = s * 0.06;
+    for (const sx of [-1, 1]) for (const yy of [0.28, 0.44]) { g.beginPath(); g.moveTo(sx * s * 0.25, s * 0.34); g.lineTo(sx * s * 1.05, s * yy); g.stroke(); }
+    eyes(g, s, mood, -s * 0.12, s * 0.36);
+  }
+  g.restore();
+}
+function moodOf(i) {
+  if (S.mode === 'popping' || S.mode === 'over') return 'wet';
+  if (S.puff[i] > 0) return 'puff';
+  if (S.strain[i] > 0) return 'strain';
+  return 'idle';
+}
+
+// ---------- drawing: world ----------
+function drawItem(it) {
+  const bob = Math.sin(S.t * 3 + it.x) * 3;
+  ctx.save(); ctx.translate(it.x, it.y + bob);
+  ctx.beginPath(); ctx.arc(0, 0, 22 + Math.sin(S.t * 5) * 2, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = INK;
+  if (it.type === 'beans') {
+    ctx.rotate(Math.sin(S.t * 2 + it.y) * 0.2);
+    ctx.beginPath(); ctx.roundRect(-11, -14, 22, 28, 4); ctx.fillStyle = '#e8792f'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff4dc'; ctx.fillRect(-10, -5, 20, 10);
+    ctx.fillStyle = '#b5481f'; ctx.font = '9px "Bagel Fat One", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('BEANS', 0, 0.5);
+    ctx.beginPath(); ctx.ellipse(0, -14, 11, 3.5, 0, 0, Math.PI * 2); ctx.fillStyle = '#c9c9c9'; ctx.fill(); ctx.stroke();
+  } else if (it.type === 'duck') {
+    ell(ctx, 0, 3, 13, 10, '#ffd84a');
+    ell(ctx, 3, -8, 7.5, 7.5, '#ffd84a');
+    ctx.beginPath(); ctx.moveTo(9, -9); ctx.lineTo(16, -7); ctx.lineTo(9, -5); ctx.closePath(); ctx.fillStyle = '#f08a24'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(5, -10, 1.6, 0, Math.PI * 2); ctx.fill();
+  } else if (it.type === 'chili') {
+    ctx.rotate(-0.6);
+    ctx.beginPath(); ctx.moveTo(-4, -12); ctx.quadraticCurveTo(12, -6, 6, 14); ctx.quadraticCurveTo(-8, 4, -4, -12); ctx.closePath();
+    ctx.fillStyle = '#e23a2a'; ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-4, -12); ctx.lineTo(-7, -18); ctx.strokeStyle = '#3f8f3a'; ctx.lineWidth = 4; ctx.stroke();
+  } else if (it.type === 'patch') {
+    ctx.rotate(0.6);
+    ctx.beginPath(); ctx.roundRect(-16, -7, 32, 14, 7); ctx.fillStyle = '#f0d2a8'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e5b98a'; ctx.fillRect(-6, -6, 12, 12);
+    ctx.fillStyle = '#b98a5a'; for (const [a, b] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) { ctx.beginPath(); ctx.arc(a, b, 1, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+
+function drawMine(m) {
+  const bob = Math.sin(S.t * 2.4 + m.ph) * 2;
+  ctx.save(); ctx.translate(m.x, m.y + bob);
+  ctx.beginPath(); ctx.arc(0, 0, m.r + 8 + Math.sin(S.t * 3 + m.ph) * 2, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.rotate(S.t * 0.6 + m.ph);
+  ctx.fillStyle = '#cfd6d9'; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  for (let k = 0; k < 10; k++) {
+    const a = k / 10 * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a - 0.22) * m.r * 0.8, Math.sin(a - 0.22) * m.r * 0.8);
+    ctx.lineTo(Math.cos(a) * (m.r + 11), Math.sin(a) * (m.r + 11));
+    ctx.lineTo(Math.cos(a + 0.22) * m.r * 0.8, Math.sin(a + 0.22) * m.r * 0.8);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, m.r, 0, Math.PI * 2); ctx.fillStyle = '#3b2f4a'; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fillStyle = (S.t * 2 | 0) % 2 ? '#ff4a3a' : '#7a2a24'; ctx.fill();
+  ctx.restore();
+}
+
+function drawSpikes(p) {
+  for (const side of [-1, 1]) {
+    if (side < 0 ? !p.sL : !p.sR) continue;
+    // dark plank the spikes are bolted to
+    ctx.beginPath();
+    for (let yy = p.y - SPIKE_HALF; yy <= p.y + SPIKE_HALF; yy += 6) {
+      const c = segAt(yy), x = c.cx + side * c.w / 2;
+      if (yy === p.y - SPIKE_HALF) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+    }
+    ctx.strokeStyle = '#3a3f42'; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.stroke();
+    for (let yy = p.y - SPIKE_HALF + 6; yy <= p.y + SPIKE_HALF - 6; yy += 13) {
+      const c = segAt(yy), x = c.cx + side * c.w / 2;
+      const tl = Math.hypot(c.slope, 1), tx = c.slope / tl, ty = 1 / tl;
+      const nx = -side * ty, ny = side * tx; // points into the water
+      ctx.beginPath();
+      ctx.moveTo(x - tx * 6, yy - ty * 6);
+      ctx.lineTo(x + nx * 18, yy + ny * 18);
+      ctx.lineTo(x + tx * 6, yy + ty * 6);
+      ctx.closePath();
+      ctx.fillStyle = '#d7dee1'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+}
+
+function drawCroc() {
+  const y = S.croc.y, c = segAt(y), x = c.cx;
+  const jaw = (Math.sin(S.t * 7) * 0.5 + 0.5) * 0.35;
+  ctx.save(); ctx.translate(x, y);
+  ctx.lineWidth = 3; ctx.strokeStyle = INK;
+  ctx.beginPath(); ctx.moveTo(-10, 150); ctx.quadraticCurveTo(Math.sin(S.t * 3) * 30, 230, Math.sin(S.t * 3 + 1) * 20, 290); ctx.quadraticCurveTo(12, 220, 10, 150); ctx.closePath();
+  ctx.fillStyle = '#4c7a39'; ctx.fill(); ctx.stroke();
+  ell(ctx, 0, 95, 38, 70, '#558a40');
+  ctx.fillStyle = '#3d6a2d'; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(0, 50 + k * 22, 5, 0, Math.PI * 2); ctx.fill(); }
+  for (const sx of [-1, 1]) ell(ctx, sx * 40, 70, 12, 8, '#4c7a39', sx * 0.6);
+  // snout: two halves that open sideways
+  for (const sx of [-1, 1]) {
+    ctx.save(); ctx.translate(0, 20); ctx.rotate(sx * jaw);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(sx * 26, -4); ctx.quadraticCurveTo(sx * 24, -60, sx * 6, -78); ctx.lineTo(0, -78); ctx.closePath();
+    ctx.fillStyle = '#5f9a46'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (let k = 0; k < 5; k++) { const ty = -10 - k * 13; ctx.beginPath(); ctx.moveTo(sx * 2, ty); ctx.lineTo(sx * -4, ty - 4); ctx.lineTo(sx * 2, ty - 8); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  }
+  for (const sx of [-1, 1]) {
+    ell(ctx, sx * 18, 26, 9, 9, '#5f9a46');
+    ell(ctx, sx * 18, 25, 5, 5, '#ffe14a');
+    ctx.fillStyle = INK; ctx.fillRect(sx * 18 - 1, 21, 2, 8);
+  }
+  ctx.restore();
+}
+
+function drawTub() {
+  const T = S.tub;
+  const popping = S.mode === 'popping' || S.mode === 'over';
+  ctx.save(); ctx.translate(T.x, T.y);
+  if (!popping) {
+    if (T.inv > 0 && (S.t * 12 | 0) % 2) ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.ellipse(6, 9, R + 4, R + 2, 0, 0, Math.PI * 2); ctx.fillStyle = 'rgba(10,40,45,.25)'; ctx.fill();
+    ctx.rotate(T.ang * 0.25);
+    const bob = 1 + Math.sin(S.t * 3) * 0.015;
+    ctx.scale(bob, 2 - bob);
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.lineWidth = 14; ctx.strokeStyle = S.chili > 0 ? '#ff8a2a' : '#e8473b';
+    for (let k = 0; k < 8; k += 2) { ctx.beginPath(); ctx.arc(0, 0, R - 7, k * Math.PI / 4 + 0.2, (k + 1) * Math.PI / 4 + 0.2); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(0, 0, R - 14, 0, Math.PI * 2); ctx.fillStyle = '#8fd6dc'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = INK;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, R - 14, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-R * 0.35, -R * 0.55, 6, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.translate(T.x, T.y);
+    ANIMALS.forEach((a, i) => {
+      const wob = Math.sin(S.t * 4 + i * 1.7) * 1.2;
+      const ax = a.seat[0] * 22, ay = a.seat[1] * 22 + wob;
+      drawAnimal(ctx, a.id, ax, ay, 14, moodOf(i));
+      if (online() && canControl(i)) {
+        // a little marker so each player can find their own animal
+        ctx.beginPath(); ctx.moveTo(ax, ay - 20); ctx.lineTo(ax - 5, ay - 27); ctx.lineTo(ax + 5, ay - 27); ctx.closePath();
+        ctx.fillStyle = '#ffd84a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+      }
+    });
+  } else {
+    // the tub has popped: a sad rag in the water and four paddling animals
+    const k = Math.min(1, S.popT * 2);
+    ctx.beginPath();
+    for (let n = 0; n <= 16; n++) {
+      const a = n / 16 * Math.PI * 2, rr = R * (1 - 0.55 * k) * (0.75 + 0.25 * Math.sin(n * 2.3));
+      n ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    ctx.closePath(); ctx.fillStyle = '#e8473b'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+    const spread = 22 + Math.min(1.2, S.popT) * 55;
+    ANIMALS.forEach((a, i) => {
+      if (S.reason === 'croc' && i === 1) return; // the pig at the back got snapped up
+      const px = a.seat[0] * spread, py = a.seat[1] * spread + Math.sin(S.t * 4 + i) * 2;
+      ctx.beginPath(); ctx.arc(px, py, 20 + Math.sin(S.t * 6 + i) * 2, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.stroke();
+      drawAnimal(ctx, a.id, px, py, 14, 'wet');
+    });
+  }
+  ctx.restore();
+}
+
+function drawTree(d) {
+  ctx.beginPath(); ctx.arc(d.x + 7, d.y + 9, d.r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(30,60,30,.25)'; ctx.fill();
+  const col = d.hue < 0.33 ? '#4f8f3c' : d.hue < 0.66 ? '#5e9e44' : '#447f36';
+  ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(29,43,47,.55)'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(d.x - d.r * 0.3, d.y - d.r * 0.3, d.r * 0.45, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill();
+}
+
+function drawBridge(d, T) {
+  const c = segAt(d.y), l = c.cx - c.w / 2 - 50, r = c.cx + c.w / 2 + 50;
+  ctx.save();
+  ctx.globalAlpha = Math.abs(T.y - d.y) < 70 ? 0.55 : 0.95;
+  ctx.fillStyle = 'rgba(10,40,45,.25)'; ctx.fillRect(l + 8, d.y - 14, r - l, 40);
+  ctx.fillStyle = '#b5654a'; ctx.fillRect(l, d.y - 22, r - l, 40);
+  ctx.strokeStyle = 'rgba(29,43,47,.35)'; ctx.lineWidth = 1.5;
+  for (let x = l; x < r; x += 22) { ctx.beginPath(); ctx.moveTo(x, d.y - 22); ctx.lineTo(x, d.y + 18); ctx.stroke(); }
+  ctx.fillStyle = '#8c4a35'; ctx.fillRect(l, d.y - 26, r - l, 6); ctx.fillRect(l, d.y + 16, r - l, 6);
+  ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.strokeRect(l, d.y - 26, r - l, 48);
+  ctx.beginPath(); ctx.roundRect(c.cx - 34, d.y - 14, 68, 24, 6); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = INK; ctx.font = '15px "Bagel Fat One", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(d.m + ' m', c.cx, d.y - 1);
+  ctx.restore();
+}
+
+function render() {
+  const T = S.tub;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#86b85c'; ctx.fillRect(0, 0, cv.width, cv.height);
+  let sx = 0, sy = 0;
+  if (S.shake > 0 && !reduceMotion) { sx = rand(-1, 1) * S.shake * 10; sy = rand(-1, 1) * S.shake * 10; }
+  const k = dpr * scale;
+  ctx.setTransform(k, 0, 0, k, dpr * (cw / 2 + sx) - S.cam.x * k, dpr * (ch / 2 + sy) - S.cam.y * k);
+  const top = S.cam.y - viewH / 2 - 120, bot = S.cam.y + viewH / 2 + 120;
+  const left = S.cam.x - viewW / 2 - 120, right = S.cam.x + viewW / 2 + 120;
+
+  ctx.fillStyle = 'rgba(255,255,255,.06)';
+  for (let y = Math.floor(top / 90) * 90; y < bot; y += 90) if (((y / 90) % 2 + 2) % 2 === 0) ctx.fillRect(left, y, right - left, 90);
+
+  const P = S.pts;
+  const iA = clamp(Math.floor((Y0 - bot) / SEG) - 1, 0, P.length - 1), iB = clamp(Math.ceil((Y0 - top) / SEG) + 1, 0, P.length - 1);
+  const pts = [];
+  if (bot > Y0) pts.push({ x: P[0].x, y: bot, w: P[0].w });
+  for (let i = iA; i <= iB; i++) pts.push(P[i]);
+  const L = pts.map(p => [p.x - p.w / 2, p.y]), Rr = pts.map(p => [p.x + p.w / 2, p.y]);
+  const line = arr => { ctx.beginPath(); arr.forEach(([x, y], n) => n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); };
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const side of [L, Rr]) { line(side); ctx.strokeStyle = '#d6c7a2'; ctx.lineWidth = 46; ctx.stroke(); }
+  ctx.beginPath();
+  L.forEach(([x, y], n) => n ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  for (let n = Rr.length - 1; n >= 0; n--) ctx.lineTo(Rr[n][0], Rr[n][1]);
+  ctx.closePath(); ctx.fillStyle = '#2c8c96'; ctx.fill();
+  ctx.beginPath();
+  pts.forEach((p, n) => n ? ctx.lineTo(p.x - p.w * 0.22, p.y) : ctx.moveTo(p.x - p.w * 0.22, p.y));
+  for (let n = pts.length - 1; n >= 0; n--) ctx.lineTo(pts[n].x + pts[n].w * 0.22, pts[n].y);
+  ctx.closePath(); ctx.fillStyle = 'rgba(20,90,100,.35)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 2.5;
+  const off = (S.t * 22) % 70;
+  for (let y = Math.floor(top / 70) * 70; y < bot; y += 70) {
+    const yy = y + off, c = segAt(yy);
+    for (let j = -1; j <= 1; j++) {
+      const x = c.cx + j * c.w * 0.28 + Math.sin(y * 0.37 + j) * c.w * 0.08;
+      ctx.beginPath(); ctx.moveTo(x - 10, yy); ctx.quadraticCurveTo(x, yy - 4, x + 10, yy); ctx.stroke();
+    }
+  }
+  for (const side of [L, Rr]) {
+    line(side); ctx.strokeStyle = '#8e877a'; ctx.lineWidth = 10; ctx.stroke();
+    line(side); ctx.strokeStyle = '#c4bdae'; ctx.lineWidth = 4; ctx.stroke();
+  }
+
+  const vis = o => o.y > top && o.y < bot;
+  for (const d of S.deco) if (d.type === 'lily' && vis(d)) {
+    ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.arc(d.x, d.y, d.r, d.a, d.a + Math.PI * 1.75); ctx.closePath();
+    ctx.fillStyle = '#5aa04a'; ctx.fill(); ctx.strokeStyle = 'rgba(29,43,47,.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  for (const d of S.deco) if (d.type === 'reeds' && vis(d)) {
+    ctx.strokeStyle = '#3f7a33'; ctx.lineWidth = 3;
+    for (let n = -2; n <= 2; n++) { ctx.beginPath(); ctx.moveTo(d.x + n * 4, d.y + 8); ctx.lineTo(d.x + n * 6 + Math.sin(S.t * 2 + n) * 2, d.y - 10); ctx.stroke(); }
+    ctx.fillStyle = '#7a4f2a'; ctx.beginPath(); ctx.ellipse(d.x, d.y - 10, 2.5, 5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const d of S.deco) if (d.type === 'tree' && vis(d)) drawTree(d);
+  for (let i = iA; i <= iB; i++) if (P[i].sL || P[i].sR) drawSpikes(P[i]);
+  for (const it of S.items) if (vis(it)) drawItem(it);
+  for (const m of S.mines) if (vis(m)) drawMine(m);
+  if (S.croc.y - 80 < bot && S.croc.y + 300 > top) drawCroc();
+
+  for (const p of S.parts) if (p.type === 'wake' || p.type === 'drop') {
+    const a = 1 - p.life / p.max;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fillStyle = `rgba(255,255,255,${0.55 * a})`; ctx.fill();
+  }
+  drawTub();
+  for (const p of S.parts) {
+    const a = 1 - p.life / p.max;
+    if (p.type === 'gas') {
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.turbo ? `rgba(255,150,60,${0.55 * a})` : `rgba(178,206,70,${0.55 * a})`; ctx.fill();
+    } else if (p.type === 'frag') {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = a;
+      ctx.fillStyle = p.col; ctx.fillRect(-p.r, -p.r * 0.5, p.r * 2, p.r); ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.strokeRect(-p.r, -p.r * 0.5, p.r * 2, p.r);
+      ctx.restore();
+    }
+  }
+  for (const d of S.deco) if (d.type === 'bridge' && d.y > top - 40 && d.y < bot + 40) drawBridge(d, T);
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  for (const t of S.texts) {
+    const a = 1 - t.life / t.max, s = t.size * (1 + Math.min(0.15, t.life));
+    ctx.globalAlpha = Math.min(1, a * 1.6);
+    ctx.font = `${s}px "Bagel Fat One", sans-serif`;
+    ctx.lineWidth = 5; ctx.strokeStyle = INK; ctx.strokeText(t.txt, t.x, t.y);
+    ctx.fillStyle = t.col; ctx.fillText(t.txt, t.x, t.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---------- HUD ----------
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = $('pad'), padBtns = [], portraits = [];
+ANIMALS.forEach((a, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'belly'; b.id = 'belly-' + a.id;
+  b.setAttribute('aria-label', `${a.name} the ${a.kind} toots (${a.hint})`);
+  b.innerHTML = `<canvas width="88" height="88"></canvas>
+    <span class="bname"><span class="nm">${a.name}<small>${a.does} · ${a.alt}</small></span><span class="key">${a.hint}</span></span>
+    <span class="who"></span>
+    <span class="meter"><i></i></span>`;
+  pad.appendChild(b); padBtns.push(b);
+  portraits.push({ g: b.querySelector('canvas').getContext('2d'), mood: null, bar: b.querySelector('.meter i'), sub: b.querySelector('small'), who: b.querySelector('.who') });
+  b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} press(i); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => release(i));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+function renderPad() {
+  pad.classList.toggle('online', online());
+  const mine = [0, 1, 2, 3].filter(i => online() && canControl(i));
+  ANIMALS.forEach((a, i) => {
+    const p = portraits[i], b = padBtns[i];
+    b.classList.toggle('theirs', !canControl(i));
+    b.classList.toggle('mine', online() && canControl(i));
+    if (!online()) { p.sub.textContent = `${a.does} · ${a.alt}`; p.who.textContent = ''; return; }
+    const owner = Net.seats[i];
+    const who = owner === Net.myId ? (mine.length === 1 ? 'You · any key' : 'You') : owner ? nameOf(owner) : 'Empty seat';
+    p.sub.textContent = who; p.who.textContent = who;
+  });
+}
+
+const hud = { dist: $('dist'), best: $('best'), ducks: $('ducks'), turbo: $('turboChip'), patch: $('patchChip'), croc: $('crocWarn'), room: $('roomChip') };
+let lastHud = '';
+function updateHud() {
+  const d = Math.floor(S.maxDist), bestShown = Math.max(best, d), turbo = Math.ceil(S.chili);
+  const crocM = Math.max(0, Math.floor((S.croc.y - S.tub.y - R - 34) / 10));
+  const key = [d, bestShown, S.ducks, turbo, S.patch, crocM, S.mode, Net.code].join('|');
+  if (key !== lastHud) {
+    lastHud = key;
+    hud.dist.textContent = d + ' m';
+    hud.best.textContent = bestShown + ' m';
+    hud.ducks.textContent = S.ducks;
+    hud.turbo.hidden = turbo <= 0; hud.turbo.textContent = `Turbo ${turbo}s`;
+    hud.patch.hidden = !S.patch;
+    hud.room.hidden = !online(); hud.room.textContent = `Room ${Net.code}`;
+    const showCroc = S.mode === 'play' && crocM < 45;
+    hud.croc.hidden = !showCroc;
+    hud.croc.textContent = `Croc ${crocM} m behind`;
+    hud.croc.classList.toggle('close', crocM < 15);
+  }
+  ANIMALS.forEach((a, i) => {
+    const p = portraits[i], m = moodOf(i);
+    if (m !== p.mood) {
+      p.mood = m; p.g.clearRect(0, 0, 88, 88);
+      p.g.save(); p.g.scale(2, 2); drawAnimal(p.g, a.id, 22, 25, 14, m); p.g.restore();
+    }
+    p.bar.style.width = S.gas[i].toFixed(0) + '%';
+    padBtns[i].classList.toggle('low', S.gas[i] < (S.chili > 0 ? FART_COST / 2 : FART_COST) + 6);
+  });
+}
+
+let toastTimer = 0;
+function toast(msg) {
+  const el = $('toast'); el.textContent = msg; el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+}
+
+// ---------- screens ----------
+const screens = { title: $('titleScreen'), net: $('netScreen'), room: $('roomScreen'), over: $('overScreen'), pause: $('pauseScreen') };
+function show(name) {
+  for (const k in screens) screens[k].hidden = k !== name;
+}
+function syncTopButtons() {
+  $('pauseBtn').textContent = online() ? 'Leave' : 'Pause';
+}
+
+function startLocal() {
+  Snd.init();
+  newGame('play');
+  show(null);
+  padBtns.forEach(b => b.classList.remove('on'));
+}
+function startRound(seed) {
+  newGame('play', seed);
+  show(null);
+  padBtns.forEach(b => b.classList.remove('on'));
+  renderPad();
+}
+function gameOver() {
+  S.mode = 'over';
+  toAll({ t: 'o' });
+  const d = Math.floor(S.maxDist), isBest = d > best;
+  if (isBest) { best = d; store.set('tootingTubBest', String(best)); }
+  $('overTitle').textContent = S.reason === 'croc' ? 'CHOMP!' : 'POP!';
+  $('overReason').textContent = { spikes: 'You scraped the corner spikes.', mine: 'You bumped a spiky buoy.', croc: 'The crocodile caught up and took a bite.' }[S.reason] || 'The tub popped.';
+  $('rDist').textContent = d + ' m'; $('rDucks').textContent = S.ducks; $('rBest').textContent = best + ' m';
+  $('newBest').hidden = !isBest || d === 0;
+  const isClient = Net.role === 'client';
+  $('againBtn').hidden = isClient;
+  $('toRoomBtn').hidden = Net.role !== 'host';
+  $('overLeaveBtn').hidden = !online();
+  $('overHint').textContent = isClient ? `Waiting for ${nameOf('host') || 'the host'} to start the next round` : 'Press Enter to go again';
+  show('over');
+  if (!isClient) $('againBtn').focus({ preventScroll: true });
+}
+function setPaused(p) {
+  if (online()) return;
+  if (p && S.mode === 'play') { S.mode = 'paused'; show('pause'); S.held = [false, false, false, false]; padBtns.forEach(b => b.classList.remove('on')); $('resumeBtn').focus({ preventScroll: true }); }
+  else if (!p && S.mode === 'paused') { S.mode = 'play'; show(null); }
+}
+
+// ---------- rooms ----------
+const netStatus = (msg, err) => { const el = $('netStatus'); el.textContent = msg; el.classList.toggle('err', !!err); };
+const roomStatus = (msg, err) => { const el = $('roomStatus'); el.textContent = msg; el.classList.toggle('err', !!err); };
+const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[(Math.random() * CODE_CHARS.length) | 0]).join('');
+function getNick() {
+  const n = $('nickInput').value.trim().slice(0, 14);
+  if (!n) { netStatus('Type a nickname first so your friends know who you are.', true); $('nickInput').focus(); return null; }
+  store.set('tootingTubNick', n);
+  return n;
+}
+function peerReady() {
+  if (typeof Peer === 'undefined') { netStatus('Online play could not load. Check your internet connection and reload the page.', true); return false; }
+  return true;
+}
+
+function createRoom() {
+  const nick = getNick(); if (!nick || !peerReady()) return;
+  Snd.init();
+  leaveOnline(true);
+  Net = freshNet(); Net.role = 'host'; Net.myId = 'host';
+  Net.players = [{ id: 'host', name: nick }];
+  $('createBtn').disabled = $('joinBtn').disabled = true;
+  netStatus('Opening a room…');
+  const tryOpen = (attempt) => {
+    const code = newCode();
+    const peer = new Peer(PREFIX + code);
+    Net.peer = peer;
+    peer.on('open', () => {
+      Net.code = code;
+      $('createBtn').disabled = $('joinBtn').disabled = false;
+      netStatus('');
+      openRoom();
+    });
+    peer.on('connection', conn => {
+      conn.on('data', d => hostHandle(conn, d));
+      conn.on('close', () => removePlayer(conn.peer));
+      conn.on('error', () => removePlayer(conn.peer));
+    });
+    peer.on('error', e => {
+      if (e.type === 'unavailable-id' && attempt < 4) { peer.destroy(); tryOpen(attempt + 1); return; }
+      if (Net.code) { toast('Connection trouble: ' + (e.type || 'unknown')); return; }
+      $('createBtn').disabled = $('joinBtn').disabled = false;
+      netStatus("Couldn't reach the matchmaking server. Check your connection and try again.", true);
+      leaveOnline(true);
+    });
+    peer.on('disconnected', () => { if (!Net.leaving && Net.peer === peer) { try { peer.reconnect(); } catch (e) {} } });
+  };
+  tryOpen(0);
+}
+
+function joinRoom() {
+  const nick = getNick(); if (!nick || !peerReady()) return;
+  const code = $('codeInput').value.trim().toUpperCase();
+  if (!/^[A-Z]{4}$/.test(code)) { netStatus('Room codes are 4 letters, like KWPZ.', true); $('codeInput').focus(); return; }
+  Snd.init();
+  leaveOnline(true);
+  Net = freshNet(); Net.role = 'client'; Net.code = code;
+  $('createBtn').disabled = $('joinBtn').disabled = true;
+  netStatus(`Looking for room ${code}…`);
+  const peer = new Peer();
+  Net.peer = peer;
+  peer.on('open', id => {
+    Net.myId = id;
+    const conn = peer.connect(PREFIX + code, { reliable: true });
+    Net.conn = conn;
+    conn.on('open', () => conn.send({ t: 'hello', name: nick }));
+    conn.on('data', clientHandle);
+    conn.on('close', hostGone);
+  });
+  peer.on('error', e => {
+    $('createBtn').disabled = $('joinBtn').disabled = false;
+    if (e.type === 'peer-unavailable') netStatus(`There's no open room called ${code}. Check the code with your friend.`, true);
+    else netStatus("Couldn't connect. Check your internet and try again.", true);
+    leaveOnline(true);
+  });
+}
+
+function hostGone() {
+  if (Net.leaving || Net.role !== 'client') return;
+  leaveOnline();
+  toast('The host closed the room.');
+}
+
+function leaveOnline(quiet) {
+  const wasOnline = online();
+  Net.leaving = true;
+  try { if (Net.conn) Net.conn.close(); } catch (e) {}
+  try { if (Net.peer) Net.peer.destroy(); } catch (e) {}
+  Net = freshNet();
+  if (quiet) return;
+  newGame('title');
+  renderPad(); syncTopButtons();
+  if (wasOnline) { show('net'); $('createBtn').disabled = $('joinBtn').disabled = false; netStatus(''); }
+  else show('title');
+}
+
+function openRoom() {
+  newGame('title');
+  show('room');
+  renderRoom(); renderPad(); syncTopButtons();
+}
+
+function lobbyMsg() { return { t: 'l', players: Net.players, seats: Net.seats, playing: S.mode === 'play' || S.mode === 'popping' }; }
+function broadcastLobby() { toAll(lobbyMsg()); renderRoom(); renderPad(); }
+
+function hostHandle(conn, d) {
+  if (!d || typeof d !== 'object') return;
+  const id = conn.peer;
+  if (d.t === 'hello') {
+    if (!Net.conns.has(id) && Net.players.length >= 4) { try { conn.send({ t: 'full' }); } catch (e) {} setTimeout(() => conn.close(), 300); return; }
+    const name = String(d.name || 'Player').slice(0, 14);
+    Net.conns.set(id, conn);
+    if (!Net.players.find(p => p.id === id)) Net.players.push({ id, name });
+    conn.send({ t: 'welcome', code: Net.code });
+    broadcastLobby();
+    toast(`${name} joined`); Snd.pickup('join');
+    return;
+  }
+  if (!Net.conns.has(id)) return;
+  if (d.t === 'claim') { claimSeat(id, d.i); return; }
+  if (d.t === 'unclaim') { unclaimSeat(id, d.i); return; }
+  if ((d.t === 'p' || d.t === 'r') && Net.seats[d.i] === id && S) {
+    if (d.t === 'p') hostPress(d.i); else S.held[d.i] = false;
+  }
+}
+function claimSeat(id, i) {
+  if (!(i >= 0 && i < 4) || Net.seats[i]) return;
+  Net.seats[i] = id; broadcastLobby();
+}
+function unclaimSeat(id, i) {
+  if (!(i >= 0 && i < 4) || Net.seats[i] !== id) return;
+  Net.seats[i] = null; if (S) S.held[i] = false; broadcastLobby();
+}
+function removePlayer(id) {
+  if (Net.role !== 'host' || !Net.conns.has(id)) return;
+  const name = nameOf(id);
+  Net.conns.delete(id);
+  Net.players = Net.players.filter(p => p.id !== id);
+  Net.seats = Net.seats.map((s, i) => { if (s === id) { if (S) S.held[i] = false; return null; } return s; });
+  broadcastLobby();
+  toast(`${name || 'A player'} left`);
+}
+
+function clientHandle(d) {
+  if (!d || typeof d !== 'object') return;
+  switch (d.t) {
+    case 'welcome':
+      $('createBtn').disabled = $('joinBtn').disabled = false;
+      netStatus('');
+      openRoom();
+      break;
+    case 'full':
+      Net.leaving = true;
+      netStatus(`Room ${Net.code} already has four players.`, true);
+      $('createBtn').disabled = $('joinBtn').disabled = false;
+      leaveOnline(true);
+      break;
+    case 'l':
+      Net.players = d.players; Net.seats = d.seats; Net.playing = d.playing;
+      renderRoom(); renderPad();
+      break;
+    case 'start':
+      Snd.init();
+      startRound(d.seed);
+      break;
+    case 'room':
+      openRoom();
+      break;
+    case 's': {
+      if (!S || S.mode !== 'play') break;
+      const T = S.tub;
+      S.net = d; S.netAt = performance.now();
+      T.vx = d.vx; T.vy = d.vy; T.spin = d.sp; T.inv = d.iv;
+      if (Math.hypot(d.x - T.x, d.y - T.y) > 200) { T.x = d.x; T.y = d.y; }
+      S.croc.y = d.cy; S.gas = d.g; S.chili = d.ch; S.patch = !!d.p; S.ducks = d.k; S.maxDist = d.d;
+      if (Math.abs(S.t - d.tt) > 0.3) S.t = d.tt;
+      break;
+    }
+    case 'f': if (S && S.mode === 'play') fartFx(d.i, !!d.tb, d.w); break;
+    case 'n': if (S && S.mode === 'play') strainFx(d.i); break;
+    case 'x': if (S) addText(d.x, d.y, d.txt, d.col, d.size); break;
+    case 'c': {
+      if (!S) break;
+      const k = S.items.findIndex(o => o.id === d.id);
+      if (k >= 0) collectFx(S.items.splice(k, 1)[0]);
+      break;
+    }
+    case 'pt': if (S && S.mode === 'play') patchFx(); break;
+    case 'b': if (S && S.mode === 'play') burstFx(d.r); break;
+    case 'o': if (S && (S.mode === 'popping' || S.mode === 'play')) gameOver(); break;
+  }
+}
+
+const seatGrid = $('seatGrid'), seatEls = [];
+ANIMALS.forEach((a, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'seat'; b.id = 'seat-' + a.id;
+  b.innerHTML = `<canvas width="88" height="88"></canvas><b>${a.name} the ${a.kind}</b><span></span>`;
+  const g = b.querySelector('canvas').getContext('2d');
+  g.scale(2, 2); drawAnimal(g, a.id, 22, 25, 14, 'idle');
+  b.addEventListener('click', () => {
+    const mineSeat = Net.seats[i] === Net.myId;
+    if (Net.role === 'host') { mineSeat ? unclaimSeat('host', i) : claimSeat('host', i); }
+    else toHost({ t: mineSeat ? 'unclaim' : 'claim', i });
+  });
+  seatGrid.appendChild(b); seatEls.push(b);
+});
+
+function renderRoom() {
+  if (!online()) return;
+  $('roomCode').textContent = Net.code;
+  $('inviteText').textContent = `Friends open this page, choose “Play online with friends” and enter ${Net.code}, or use the invite link.`;
+  $('playerList').innerHTML = Net.players.map(p => `<span class="chip${p.id === Net.myId ? ' me' : ''}">${esc(p.name)}${p.id === 'host' ? ' (host)' : ''}${p.id === Net.myId ? ' · you' : ''}</span>`).join('');
+  ANIMALS.forEach((a, i) => {
+    const owner = Net.seats[i], el = seatEls[i];
+    el.classList.toggle('mine', owner === Net.myId);
+    el.classList.toggle('taken', !!owner && owner !== Net.myId);
+    el.querySelector('span').textContent = owner === Net.myId ? 'You · tap to stand up' : owner ? nameOf(owner) : `${a.role} · tap to sit`;
+  });
+  const anySeat = Net.seats.some(Boolean);
+  const isHost = Net.role === 'host';
+  $('roomStartBtn').hidden = !isHost;
+  $('roomStartBtn').disabled = !anySeat;
+  if (isHost) roomStatus(anySeat ? (Net.seats.every(Boolean) ? 'Everyone is seated. Start when you are ready.' : 'You can start now. Empty seats will sit still.') : 'Someone needs to pick an animal before you start.');
+  else roomStatus(Net.playing ? 'A round is in progress. You will join the next one.' : `Waiting for ${nameOf('host') || 'the host'} to start the game.`);
+}
+
+function hostStart() {
+  if (Net.role !== 'host') return;
+  const seed = (Math.random() * 2 ** 31) | 0;
+  toAll({ t: 'start', seed });
+  startRound(seed);
+  broadcastLobby();
+}
+
+// ---------- wiring ----------
+$('startBtn').addEventListener('click', startLocal);
+$('onlineBtn').addEventListener('click', () => { show('net'); netStatus(''); ($('nickInput').value ? $('codeInput') : $('nickInput')).focus({ preventScroll: true }); });
+$('netBackBtn').addEventListener('click', () => { leaveOnline(true); show('title'); netStatus(''); });
+$('createBtn').addEventListener('click', createRoom);
+$('joinBtn').addEventListener('click', joinRoom);
+$('codeInput').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); });
+for (const id of ['nickInput', 'codeInput']) $(id).addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') ($('codeInput').value.length === 4 ? joinRoom : createRoom)(); });
+$('roomStartBtn').addEventListener('click', hostStart);
+$('leaveRoomBtn').addEventListener('click', () => leaveOnline());
+$('overLeaveBtn').addEventListener('click', () => leaveOnline());
+$('againBtn').addEventListener('click', () => { if (Net.role === 'host') hostStart(); else startLocal(); });
+$('toRoomBtn').addEventListener('click', () => { toAll({ t: 'room' }); openRoom(); broadcastLobby(); });
+$('copyBtn').addEventListener('click', () => {
+  const link = location.origin + location.pathname + '?room=' + Net.code;
+  const done = () => { $('copyBtn').textContent = 'Link copied'; setTimeout(() => { $('copyBtn').textContent = 'Copy invite link'; }, 2000); };
+  if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, () => toast(link));
+  else toast(link);
+});
+$('resumeBtn').addEventListener('click', () => setPaused(false));
+$('pauseBtn').addEventListener('click', () => { if (online()) leaveOnline(); else setPaused(S.mode === 'play'); });
+$('muteBtn').addEventListener('click', e => { Snd.init(); Snd.setOn(!Snd.on); e.currentTarget.textContent = Snd.on ? 'Sound on' : 'Sound off'; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
+
+function seatForKey(code) {
+  if (!online()) return KEYMAP[code];
+  const mine = [0, 1, 2, 3].filter(canControl);
+  if (!mine.length) return undefined;
+  if (code === 'Space' || (mine.length === 1 && code in KEYMAP)) return mine[0];
+  const i = KEYMAP[code];
+  return i !== undefined && canControl(i) ? i : undefined;
+}
+const heldKeys = new Map();
+addEventListener('keydown', e => {
+  if (e.code === 'Escape') { e.preventDefault(); setPaused(S.mode === 'play'); return; }
+  if ((e.code === 'Enter' || (e.code === 'Space' && !online())) && (S.mode === 'title' || S.mode === 'over') && screens.net.hidden && screens.room.hidden) {
+    if (S.mode === 'over' && S.popT < 1.9) return;
+    if (Net.role === 'client') return;
+    e.preventDefault();
+    if (Net.role === 'host') hostStart(); else startLocal();
+    return;
+  }
+  const i = seatForKey(e.code);
+  if (i === undefined) return;
+  e.preventDefault();
+  if (e.repeat) return;
+  heldKeys.set(e.code, i);
+  press(i);
+});
+addEventListener('keyup', e => {
+  const i = heldKeys.has(e.code) ? heldKeys.get(e.code) : seatForKey(e.code);
+  heldKeys.delete(e.code);
+  if (i !== undefined) release(i);
+});
+addEventListener('blur', () => { heldKeys.clear(); ANIMALS.forEach((_, i) => release(i)); });
+addEventListener('beforeunload', () => { try { if (Net.peer) Net.peer.destroy(); } catch (e) {} });
+
+$('nickInput').value = store.get('tootingTubNick') || '';
+newGame('title');
+renderPad(); syncTopButtons();
+const roomParam = new URLSearchParams(location.search).get('room');
+if (roomParam && /^[A-Za-z]{4}$/.test(roomParam)) {
+  $('codeInput').value = roomParam.toUpperCase();
+  show('net');
+  netStatus(`You're invited to room ${roomParam.toUpperCase()}. Type a nickname and press Join.`);
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000); last = now;
+  if (S.mode !== 'paused') update(dt);
+  render();
+  updateHud();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
