@@ -152,6 +152,29 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
   .card{padding:20px 18px 18px}
   .roomcode .code{font-size:34px}
 }
+/* short landscape windows, such as CrazyGames' 821x462 embed */
+@media (max-height:620px){
+  .overlay{padding-block:10px}
+  .card{padding:14px 18px;gap:8px;border-radius:18px}
+  .card h1{font-size:40px}
+  .card h2{font-size:40px}
+  .tag{font-size:14px}
+  .rules{font-size:13px;gap:4px}
+  .big-btn{font-size:18px;padding:8px 14px}
+  .results div{padding:5px 4px}
+  .belly{padding:4px 8px;row-gap:3px;border-radius:12px}
+  .belly canvas{width:32px;height:32px}
+  .meter{height:8px}
+  .pad{gap:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+  .board{padding:3px 2px;border-radius:12px}
+  .val{font-size:18px}
+  .lbl{font-size:10px}
+  .small-btn{padding:6px 8px;font-size:12px}
+  .hud{padding-top:calc(6px + env(safe-area-inset-top,0px))}
+  #crocWarn,#tip{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  .seat canvas{width:34px;height:34px}
+  .roomcode .code{font-size:30px}
+}
 @media (prefers-reduced-motion:reduce){#crocWarn.close{animation:none}.meter i{transition:none}}
 </style>
 </head>
