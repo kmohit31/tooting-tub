@@ -109,6 +109,11 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
 .hint{font-size:12.5px;color:var(--muted);text-align:center;margin:0;line-height:1.4}
 .status{font-size:14px;font-weight:600;margin:0;min-height:1.4em;color:var(--muted)}
 .status.err{color:var(--danger)}
+#tip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(118px + env(safe-area-inset-bottom,0px));background:var(--panel);border:3px solid var(--ink);border-radius:14px;
+  box-shadow:0 4px 0 var(--ink);padding:8px 12px;font-weight:700;font-size:14px;line-height:1.35;text-align:center;pointer-events:none;width:max-content;max-width:calc(100% - 32px)}
+#adShield{position:absolute;inset:0;z-index:20;background:transparent}
+.vid{display:inline-block;width:0;height:0;border-left:13px solid currentColor;border-top:8px solid transparent;border-bottom:8px solid transparent;margin-right:10px;vertical-align:1px}
+.note{font-size:13px;color:var(--muted);text-align:center;margin:0}
 
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -143,7 +148,7 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
   .meter{width:100%}
   .stat{min-width:50px;padding:0 7px}
   .val{font-size:18px}
-  #crocWarn{bottom:calc(132px + env(safe-area-inset-bottom,0px))}
+  #crocWarn,#tip{bottom:calc(132px + env(safe-area-inset-bottom,0px))}
   .card{padding:20px 18px 18px}
   .roomcode .code{font-size:34px}
 }
@@ -162,6 +167,7 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
     </div>
     <div class="side">
       <div class="btns">
+        <button class="small-btn" id="hudOnlineBtn" type="button">Play online</button>
         <button class="small-btn" id="muteBtn" type="button">Sound on</button>
         <button class="small-btn" id="pauseBtn" type="button">Pause</button>
       </div>
@@ -175,6 +181,7 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
 
   <div id="crocWarn" hidden>Croc 40 m behind</div>
   <div id="toast" hidden></div>
+  <div id="tip" hidden>Tap Pickles the pig (or press &uarr;) to toot forward. Dodge the spikes!</div>
 
   <div class="pad" id="pad"></div>
 
@@ -250,6 +257,8 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
         <div><span class="lbl">Best</span><span class="val" id="rBest">0 m</span></div>
       </div>
       <p class="newbest" id="newBest" hidden>New best distance!</p>
+      <button class="big-btn" id="reviveBtn" type="button" hidden><span class="vid" aria-hidden="true"></span>Watch an ad to patch the tub</button>
+      <p class="note" id="reviveNote" hidden></p>
       <button class="big-btn" id="againBtn" type="button">Blow up a new tub</button>
       <button class="big-btn plain" id="toRoomBtn" type="button" hidden>Back to the room</button>
       <p class="hint" id="overHint">Press Enter to go again</p>
@@ -264,6 +273,8 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
       <p class="hint">Press Esc to resume</p>
     </div>
   </div>
+
+  <div id="adShield" hidden></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
@@ -322,12 +333,14 @@ let best = Number(store.get('tootingTubBest')) || 0;
 // ---------- sound ----------
 const Snd = {
   ac: null, master: null, noise: null, on: true, lastBump: 0,
+  adMute: false, sdkMute: false,   // an ad is playing / the platform asked for silence
   init() {
     if (this.ac) { if (this.ac.state === 'suspended') this.ac.resume(); return; }
     try {
       this.ac = new (window.AudioContext || window.webkitAudioContext)();
       this.master = this.ac.createGain();
-      this.master.gain.value = this.on ? 0.55 : 0;
+      this.master.gain.value = 0;
+      this.apply();
       this.master.connect(this.ac.destination);
       const len = this.ac.sampleRate;
       this.noise = this.ac.createBuffer(1, len, this.ac.sampleRate);
@@ -335,7 +348,8 @@ const Snd = {
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     } catch (e) { this.ac = null; }
   },
-  setOn(v) { this.on = v; if (this.master) this.master.gain.value = v ? 0.55 : 0; },
+  setOn(v) { this.on = v; this.apply(); },
+  apply() { if (this.master) this.master.gain.value = this.on && !this.adMute && !this.sdkMute ? 0.55 : 0; },
   env(t, peak, dur) {
     const g = this.ac.createGain();
     g.gain.setValueAtTime(0.0001, t);
@@ -419,6 +433,71 @@ const Snd = {
   },
 };
 
+// ---------- CrazyGames ----------
+// Everything here is a no-op unless the CrazyGames SDK script is on the page and running on their site.
+const CG = {
+  sdk: null, ready: false, busy: false, playing: false, adblock: false, lastOffer: -Infinity,
+  async init() {
+    const sdk = window.CrazyGames && window.CrazyGames.SDK;
+    if (!sdk) return;
+    try { await sdk.init(); } catch (e) { return; }
+    if (sdk.environment === 'disabled') return;
+    this.sdk = sdk; this.ready = true;
+    const g = sdk.game;
+    const applyMute = s => { Snd.sdkMute = !!(s && s.muteAudio); Snd.apply(); };
+    try { applyMute(g.settings); g.addSettingsChangeListener(applyMute); } catch (e) {}
+    try { this.adblock = await sdk.ad.hasAdblock(); } catch (e) {}
+    try {
+      if (sdk.user.isUserAccountAvailable) {
+        const u = await sdk.user.getUser();
+        if (u && u.username && !$('nickInput').value) $('nickInput').value = u.username.slice(0, 14);
+      }
+    } catch (e) {}
+    try { g.addJoinRoomListener(p => { if (p && p.roomName) cgJoin(p.roomName); }); } catch (e) {}
+    let invite = null;
+    try { invite = g.getInviteParam('roomName'); } catch (e) {}
+    if (invite) cgJoin(invite);
+    else if (g.isInstantMultiplayer) cgCreate();
+    else if (S.mode === 'title') startLocal();   // CrazyGames wants players to land straight in gameplay
+    else if (S.mode === 'play') this.start();
+  },
+  call(fn) { if (this.ready) { try { fn(this.sdk.game); } catch (e) {} } },
+  start() { if (!this.playing) { this.playing = true; this.call(g => g.gameplayStart()); } },
+  stop() { if (this.playing) { this.playing = false; this.call(g => g.gameplayStop()); } },
+  happy() { this.call(g => g.happytime()); },
+  room() {
+    if (!online()) return;
+    const busy = Net.role === 'host' ? (S.mode === 'play' || S.mode === 'popping') : Net.playing;
+    this.call(g => g.updateRoom({ roomId: Net.code, isJoinable: Net.players.length < 4 && !busy, inviteParams: { roomName: Net.code } }));
+  },
+  leftRoom() { this.call(g => g.leftRoom()); },
+  inviteLink(code) { let l = null; this.call(g => { l = g.inviteLink({ roomName: code }); }); return l; },
+  canOfferRevive() {
+    return this.ready && !this.adblock && !online() && !S.revived && S.maxDist >= 40 && performance.now() - this.lastOffer > 90000;
+  },
+  // Input is blocked from the request until the ad ends; sound is muted only while it actually plays.
+  ad(type, done) {
+    if (!this.ready) { if (done) done(false); return; }
+    this.busy = true; $('adShield').hidden = false;
+    padBtns.forEach((b, i) => release(i));
+    const finish = ok => { this.busy = false; $('adShield').hidden = true; Snd.adMute = false; Snd.apply(); if (done) done(ok); };
+    try {
+      this.sdk.ad.requestAd(type, { adStarted: () => { Snd.adMute = true; Snd.apply(); }, adFinished: () => finish(true), adError: () => finish(false) });
+    } catch (e) { finish(false); }
+  },
+};
+function cgJoin(code) {
+  if (!$('nickInput').value.trim()) $('nickInput').value = 'Player';
+  $('codeInput').value = String(code).toUpperCase().slice(0, 4);
+  show('net'); CG.stop();
+  joinRoom();
+}
+function cgCreate() {
+  if (!$('nickInput').value.trim()) $('nickInput').value = 'Player';
+  show('net');
+  createRoom();
+}
+
 // ---------- online play ----------
 // The room creator's browser is the host: it runs the physics and sends the tub's state to everyone.
 // Other players only send their button presses. PeerJS connects the browsers directly.
@@ -450,6 +529,7 @@ function newGame(mode, seed) {
     gas: [100, 100, 100, 100], puff: [0, 0, 0, 0], strain: [0, 0, 0, 0],
     held: [false, false, false, false], rep: [0, 0, 0, 0], lastFart: [-9, -9, -9, -9],
     popT: 0, reason: '', shake: 0, demoT: 0, net: null, netAt: 0,
+    started: false, revived: false,   // the croc waits for the first toot; one ad-patch per run
   };
   for (let i = 0; i < 8; i++) addPoint();
 }
@@ -543,6 +623,7 @@ function fart(i) {
   const turbo = S.chili > 0, cost = turbo ? FART_COST / 2 : FART_COST;
   if (S.gas[i] < cost) { strainFx(i); toAll({ t: 'n', i }); return; }
   S.gas[i] -= cost;
+  if (!S.started) { S.started = true; $('tip').hidden = true; }
   const k = IMPULSE * (turbo ? 1.7 : 1);
   T.vx += a.push[0] * k; T.vy += a.push[1] * k;
   T.spin += rand(-1.4, 1.4);
@@ -580,7 +661,7 @@ function strainFx(i) {
 }
 
 function press(i) {
-  if (S.mode !== 'play' || !canControl(i)) return;
+  if (CG.busy || S.mode !== 'play' || !canControl(i)) return;
   Snd.init();
   padBtns[i].classList.add('on');
   if (Net.role === 'client') { toHost({ t: 'p', i }); return; }
@@ -618,6 +699,7 @@ function burstFx(reason) {
   const T = S.tub;
   S.mode = 'popping'; S.popT = 0; S.reason = reason; S.shake = 1;
   S.held = [false, false, false, false];
+  CG.stop();
   padBtns.forEach(b => b.classList.remove('on'));
   if (reason === 'croc') Snd.chomp(); else Snd.pop();
   for (let n = 0; n < 26; n++) {
@@ -682,7 +764,7 @@ function update(dt) {
     T.x += T.vx * dt; T.y += T.vy * dt;
     S.maxDist = Math.max(S.maxDist, -T.y / 10);
     collide();
-    if (S.mode === 'play') {
+    if (S.mode === 'play' && S.started) {
       const cs = 34 + Math.min(66, S.maxDist * 0.05);
       S.croc.y -= cs * dt;
       if (S.croc.y - T.y > 650) S.croc.y = T.y + 650;
@@ -1194,6 +1276,7 @@ function show(name) {
 }
 function syncTopButtons() {
   $('pauseBtn').textContent = online() ? 'Leave' : 'Pause';
+  $('hudOnlineBtn').hidden = online();
 }
 
 function startLocal() {
@@ -1201,12 +1284,30 @@ function startLocal() {
   newGame('play');
   show(null);
   padBtns.forEach(b => b.classList.remove('on'));
+  $('tip').hidden = false;
+  syncTopButtons();
+  CG.start();
 }
 function startRound(seed) {
   newGame('play', seed);
   show(null);
   padBtns.forEach(b => b.classList.remove('on'));
   renderPad();
+  CG.start();
+}
+// Rewarded continue: the tub gets patched where it popped and the croc is pushed back.
+function revive() {
+  const T = S.tub, c = segAt(T.y);
+  S.mode = 'play'; S.popT = 0; S.revived = true; S.shake = 0;
+  T.x = c.cx; T.vx = 0; T.vy = -60; T.inv = 2.5; T.ang = 0; T.spin = 0;
+  S.croc.y = Math.max(S.croc.y, T.y + 450);
+  S.gas = [100, 100, 100, 100];
+  S.held = [false, false, false, false];
+  S.parts = S.parts.filter(p => p.type !== 'frag');
+  show(null);
+  addText(T.x, T.y - R - 30, 'PATCHED!', '#ffffff', 28);
+  Snd.pickup('patch');
+  CG.start();
 }
 function gameOver() {
   S.mode = 'over';
@@ -1223,12 +1324,20 @@ function gameOver() {
   $('overLeaveBtn').hidden = !online();
   $('overHint').textContent = isClient ? `Waiting for ${nameOf('host') || 'the host'} to start the next round` : 'Press Enter to go again';
   show('over');
+  if (isBest && d >= 50) CG.happy();
+  // After a pop, offer either an optional ad-patch (now and then) or a regular break ad, never both.
+  const offer = CG.canOfferRevive();
+  $('reviveBtn').hidden = !offer; $('reviveBtn').disabled = false;
+  $('reviveNote').hidden = !offer;
+  $('reviveNote').textContent = 'Optional. Patch kits floating on the canal do the same for free.';
+  if (offer) CG.lastOffer = performance.now();
+  else CG.ad('midgame');
   if (!isClient) $('againBtn').focus({ preventScroll: true });
 }
 function setPaused(p) {
   if (online()) return;
-  if (p && S.mode === 'play') { S.mode = 'paused'; show('pause'); S.held = [false, false, false, false]; padBtns.forEach(b => b.classList.remove('on')); $('resumeBtn').focus({ preventScroll: true }); }
-  else if (!p && S.mode === 'paused') { S.mode = 'play'; show(null); }
+  if (p && S.mode === 'play') { S.mode = 'paused'; show('pause'); S.held = [false, false, false, false]; padBtns.forEach(b => b.classList.remove('on')); $('resumeBtn').focus({ preventScroll: true }); CG.stop(); }
+  else if (!p && S.mode === 'paused') { S.mode = 'play'; show(null); CG.start(); }
 }
 
 // ---------- rooms ----------
@@ -1316,6 +1425,8 @@ function hostGone() {
 
 function leaveOnline(quiet) {
   const wasOnline = online();
+  if (wasOnline) CG.leftRoom();
+  CG.stop();
   Net.leaving = true;
   try { if (Net.conn) Net.conn.close(); } catch (e) {}
   try { if (Net.peer) Net.peer.destroy(); } catch (e) {}
@@ -1328,13 +1439,15 @@ function leaveOnline(quiet) {
 }
 
 function openRoom() {
+  CG.stop();
   newGame('title');
   show('room');
   renderRoom(); renderPad(); syncTopButtons();
+  CG.room();
 }
 
 function lobbyMsg() { return { t: 'l', players: Net.players, seats: Net.seats, playing: S.mode === 'play' || S.mode === 'popping' }; }
-function broadcastLobby() { toAll(lobbyMsg()); renderRoom(); renderPad(); }
+function broadcastLobby() { toAll(lobbyMsg()); renderRoom(); renderPad(); CG.room(); }
 
 function hostHandle(conn, d) {
   if (!d || typeof d !== 'object') return;
@@ -1390,7 +1503,7 @@ function clientHandle(d) {
       break;
     case 'l':
       Net.players = d.players; Net.seats = d.seats; Net.playing = d.playing;
-      renderRoom(); renderPad();
+      renderRoom(); renderPad(); CG.room();
       break;
     case 'start':
       Snd.init();
@@ -1480,12 +1593,28 @@ $('overLeaveBtn').addEventListener('click', () => leaveOnline());
 $('againBtn').addEventListener('click', () => { if (Net.role === 'host') hostStart(); else startLocal(); });
 $('toRoomBtn').addEventListener('click', () => { toAll({ t: 'room' }); openRoom(); broadcastLobby(); });
 $('copyBtn').addEventListener('click', () => {
-  const link = location.origin + location.pathname + '?room=' + Net.code;
+  const link = CG.inviteLink(Net.code) || location.origin + location.pathname + '?room=' + Net.code;
   const done = () => { $('copyBtn').textContent = 'Link copied'; setTimeout(() => { $('copyBtn').textContent = 'Copy invite link'; }, 2000); };
   if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, () => toast(link));
   else toast(link);
 });
 $('resumeBtn').addEventListener('click', () => setPaused(false));
+$('reviveBtn').addEventListener('click', () => {
+  $('reviveBtn').disabled = true;
+  CG.ad('rewarded', ok => {
+    if (ok) { revive(); return; }
+    $('reviveBtn').hidden = true;
+    $('reviveNote').hidden = false;
+    $('reviveNote').textContent = 'No ad is available right now. Try again later.';
+  });
+});
+$('hudOnlineBtn').addEventListener('click', () => {
+  CG.stop();
+  newGame('title');
+  $('tip').hidden = true;
+  show('net'); netStatus('');
+  ($('nickInput').value ? $('codeInput') : $('nickInput')).focus({ preventScroll: true });
+});
 $('pauseBtn').addEventListener('click', () => { if (online()) leaveOnline(); else setPaused(S.mode === 'play'); });
 $('muteBtn').addEventListener('click', e => { Snd.init(); Snd.setOn(!Snd.on); e.currentTarget.textContent = Snd.on ? 'Sound on' : 'Sound off'; });
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
@@ -1500,6 +1629,7 @@ function seatForKey(code) {
 }
 const heldKeys = new Map();
 addEventListener('keydown', e => {
+  if (CG.busy) { e.preventDefault(); return; }
   if (e.code === 'Escape') { e.preventDefault(); setPaused(S.mode === 'play'); return; }
   if ((e.code === 'Enter' || (e.code === 'Space' && !online())) && (S.mode === 'title' || S.mode === 'over') && screens.net.hidden && screens.room.hidden) {
     if (S.mode === 'over' && S.popT < 1.9) return;
@@ -1532,6 +1662,7 @@ if (roomParam && /^[A-Za-z]{4}$/.test(roomParam)) {
   show('net');
   netStatus(`You're invited to room ${roomParam.toUpperCase()}. Type a nickname and press Join.`);
 }
+CG.init();
 
 let last = performance.now();
 function frame(now) {
