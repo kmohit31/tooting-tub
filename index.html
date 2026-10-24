@@ -49,6 +49,8 @@ body{background:var(--grass);color:var(--ink);font:14px var(--body);overflow:hid
 .btns{display:flex;gap:6px;pointer-events:auto}
 .small-btn{font:800 13px/1 var(--body);color:var(--ink);background:var(--panel);border:3px solid var(--ink);border-radius:12px;padding:8px 10px;box-shadow:0 3px 0 var(--ink);cursor:pointer}
 .small-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.small-btn{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.ico{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .small-btn:focus-visible,.belly:focus-visible,.big-btn:focus-visible,.seat:focus-visible,.link-btn:focus-visible{outline:3px solid var(--gas);outline-offset:3px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .chip{font:800 12px/1 var(--body);letter-spacing:.04em;padding:6px 9px;border-radius:999px;border:2px solid var(--ink);background:var(--panel)}
@@ -149,8 +151,19 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
   .stat{min-width:50px;padding:0 7px}
   .val{font-size:18px}
   #crocWarn,#tip{bottom:calc(132px + env(safe-area-inset-bottom,0px))}
+  /* phones: the top-right buttons become icon-only so they fit beside the scoreboard */
+  .small-btn .txt{display:none}
+  .small-btn{padding:8px}
+  .ico{width:18px;height:18px}
   .card{padding:20px 18px 18px}
   .roomcode .code{font-size:34px}
+}
+@media (max-width:400px){
+  .stat{min-width:44px;padding:0 5px}
+  .btns{gap:5px}
+}
+@media (max-width:360px){
+  .btns{flex-direction:column}
 }
 /* short landscape windows, such as CrazyGames' 821x462 embed */
 @media (max-height:620px){
@@ -190,9 +203,9 @@ kbd{font:800 13px/1 var(--body);color:var(--ink);border:2px solid var(--ink);bor
     </div>
     <div class="side">
       <div class="btns">
-        <button class="small-btn" id="hudOnlineBtn" type="button">Play online</button>
-        <button class="small-btn" id="muteBtn" type="button">Sound on</button>
-        <button class="small-btn" id="pauseBtn" type="button">Pause</button>
+        <button class="small-btn" id="hudOnlineBtn" type="button" aria-label="Play online"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16 14.2c3.2-.4 5.5 1.9 5.5 5.3"/></svg><span class="txt">Play online</span></button>
+        <button class="small-btn" id="muteBtn" type="button" aria-label="Sound on"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="txt">Sound on</span></button>
+        <button class="small-btn" id="pauseBtn" type="button" aria-label="Pause"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="txt">Pause</span></button>
       </div>
       <div class="chips">
         <span class="chip" id="roomChip" hidden>Room ABCD</span>
@@ -1297,8 +1310,21 @@ const screens = { title: $('titleScreen'), net: $('netScreen'), room: $('roomScr
 function show(name) {
   for (const k in screens) screens[k].hidden = k !== name;
 }
+const ICONS = {
+  soundOn: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+  soundOff: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/>',
+  pause: '<path d="M8.5 5v14M15.5 5v14"/>',
+  leave: '<path d="M14 4h5v16h-5"/><path d="M10 8l-4 4 4 4M6 12h10"/>',
+};
+function setTopButton(id, label, icon) {
+  const b = $(id);
+  b.querySelector('.txt').textContent = label;
+  b.querySelector('.ico').innerHTML = ICONS[icon];
+  b.setAttribute('aria-label', label);
+}
 function syncTopButtons() {
-  $('pauseBtn').textContent = online() ? 'Leave' : 'Pause';
+  if (online()) setTopButton('pauseBtn', 'Leave', 'leave'); else setTopButton('pauseBtn', 'Pause', 'pause');
+  setTopButton('muteBtn', Snd.on ? 'Sound on' : 'Sound off', Snd.on ? 'soundOn' : 'soundOff');
   $('hudOnlineBtn').hidden = online();
 }
 
@@ -1639,7 +1665,7 @@ $('hudOnlineBtn').addEventListener('click', () => {
   ($('nickInput').value ? $('codeInput') : $('nickInput')).focus({ preventScroll: true });
 });
 $('pauseBtn').addEventListener('click', () => { if (online()) leaveOnline(); else setPaused(S.mode === 'play'); });
-$('muteBtn').addEventListener('click', e => { Snd.init(); Snd.setOn(!Snd.on); e.currentTarget.textContent = Snd.on ? 'Sound on' : 'Sound off'; });
+$('muteBtn').addEventListener('click', () => { Snd.init(); Snd.setOn(!Snd.on); syncTopButtons(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
 function seatForKey(code) {
